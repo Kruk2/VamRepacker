@@ -25,7 +25,6 @@ public sealed class Database : IDatabase
     {
         _connection.Query("PRAGMA journal_mode=WAL");
 
-        CreateHashTable();
         CreateFilesTable();
         CreateJsonReferencesTable();
         CreateSettingsTable();
@@ -73,30 +72,11 @@ public sealed class Database : IDatabase
         _connection.Execute($"CREATE UNIQUE INDEX IX_Files ON {FilesTable}(Path, LocalPath);");
     }
 
-    private void CreateHashTable()
-    {
-        if (!TableExists("Hashes")) return;
-
-        _connection.Execute("Create Table Hashes (" +
-                            "FullPath TEXT collate nocase NOT NULL," +
-                            "LocalAssetPath TEXT collate nocase NOT NULL," +
-                            "Hash VARCHAR(42) collate nocase NOT NULL);");
-    }
-
     private bool TableExists(string tableName)
     {
         var table = _connection.Query<string>("SELECT name FROM sqlite_master WHERE type='table' AND name = @tableName;", new { tableName });
         var foundTable = table.FirstOrDefault();
         return string.IsNullOrEmpty(tableName) || foundTable != tableName;
-    }
-
-    public async Task<FrozenDictionary<(string fullPath, string localAssetPath), string>> GetHashes()
-    {
-        var hashes = await _connection.QueryAsync<(string fullPath, string localAssethPath, string hash)>("SELECT * FROM hashes");
-
-        var grouped = hashes
-            .Select(t => new KeyValuePair<(string fullPath, string localAssetPath), string>((t.fullPath, t.localAssethPath), t.hash));
-        return grouped.ToFrozenDictionary(t => t.Key, t => t.Value);
     }
 
     public async Task AddHashes(ConcurrentDictionary<(string fullPath, string localAssetPath), string> hashes)

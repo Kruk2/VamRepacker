@@ -7,8 +7,6 @@ namespace VamToolbox.Sqlite;
 
 public interface IDatabase : IDisposable
 {
-    Task<FrozenDictionary<(string fullPath, string localAssetPath), string>> GetHashes();
-    Task AddHashes(ConcurrentDictionary<(string fullPath, string localAssetPath), string> hashes);
     IEnumerable<ReferenceEntry> ReadReferenceCache();
     IEnumerable<(string fullPath, string localPath, long size, DateTime modifiedTime, string? uuid)> ReadVarFilesCache();
     IEnumerable<(string fullPath, long size, DateTime modifiedTime, string? uuid)> ReadFreeFilesCache();
