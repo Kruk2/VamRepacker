@@ -70,7 +70,7 @@ public class ReferenceCache : IReferenceCache
         _progressTracker.Report(new ProgressInfo(0, potentialScenes.Count, "Fetching cache from database", forceShow: true));
 
         var referenceCache = _database.ReadReferenceCache()
-            .GroupBy(t => t.FilePath, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(t => new DatabaseFileKey(t.FileName, t.FileSize, t.FileModifiedTime))
             .ToFrozenDictionary(t => t.Key, t => t.ToLookup(x => x.LocalPath));
 
         foreach (var json in potentialScenes) {
@@ -85,26 +85,24 @@ public class ReferenceCache : IReferenceCache
         }
     }
 
-    private static void ReadReferenceCache(PotentialJsonFile potentialJsonFile, FrozenDictionary<string, ILookup<string, ReferenceEntry>> globalReferenceCache)
+    private static void ReadReferenceCache(PotentialJsonFile potentialJsonFile, FrozenDictionary<DatabaseFileKey, ILookup<string, ReferenceEntry>> globalReferenceCache)
     {
-        if (globalReferenceCache is null) throw new InvalidOperationException("Cache not initialized");
-
         if (potentialJsonFile.IsVar) {
             foreach (var varFile in potentialJsonFile.Var.Files
                          .SelfAndChildren()
                          .Where(t => t.FilenameLower != "meta.json" && KnownNames.IsPotentialJsonFile(t.ExtLower))
                          .Where(t => !t.Dirty)) {
 
-                var parentPath = varFile.ParentVar.SourcePathIfSoftLink ?? varFile.ParentVar.FullPath;
-                if (globalReferenceCache.TryGetValue(parentPath, out var references) && references.Contains(varFile.LocalPath)) {
+                var varFileName = Path.GetFileName(varFile.ParentVar.SourcePathIfSoftLink ?? varFile.ParentVar.FullPath);
+                if (globalReferenceCache.TryGetValue(new DatabaseFileKey(varFileName, varFile.ParentVar.Size, varFile.ParentVar.Modified), out var references) && references.Contains(varFile.LocalPath)) {
                     var mappedReferences = references[varFile.LocalPath].Where(x => x.Value is not null).Select(t => new Reference(t, varFile)).ToList();
                     potentialJsonFile.AddCachedReferences(varFile.LocalPath, mappedReferences);
                 }
             }
         } else if (!potentialJsonFile.IsVar && !potentialJsonFile.Free.Dirty) {
             var free = potentialJsonFile.Free;
-            var sourcePath = free.SourcePathIfSoftLink ?? free.FullPath;
-            if (globalReferenceCache.TryGetValue(sourcePath, out var references)) {
+            var freeFileName = Path.GetFileName(free.SourcePathIfSoftLink ?? free.FullPath);
+            if (globalReferenceCache.TryGetValue(new DatabaseFileKey(freeFileName, free.Size, free.ModifiedTimestamp), out var references)) {
                 var mappedReferences = references[string.Empty].Where(x => x.Value is not null).Select(t => new Reference(t, free)).ToList();
                 potentialJsonFile.AddCachedReferences(mappedReferences);
             }

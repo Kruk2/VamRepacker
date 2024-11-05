@@ -18,7 +18,7 @@ public sealed class ScanFilesOperation : IScanFilesOperation
     private readonly IDatabase _database;
     private OperationContext _context = null!;
     private readonly ISoftLinker _softLinker;
-    private FrozenDictionary<string, (long size, DateTime modifiedTime, string? uuid)> _uuidCache = null!;
+    private FrozenDictionary<DatabaseFileKey, string?> _uuidCache = null!;
 
     public ScanFilesOperation(IProgressTracker reporter, IFileSystem fs, ILogger logger, IFileGroupers groupers, IDatabase database, ISoftLinker softLinker)
     {
@@ -51,7 +51,9 @@ public sealed class ScanFilesOperation : IScanFilesOperation
         var files = new List<FreeFile>();
 
         await Task.Run(async () => {
-            _uuidCache = _database.ReadFreeFilesCache().ToFrozenDictionary(t => t.fullPath, t => (t.size, t.modifiedTime, t.uuid), StringComparer.OrdinalIgnoreCase);
+            _uuidCache = _database
+                .ReadFreeFilesCache()
+                .ToFrozenDictionary(t => new DatabaseFileKey(t.fileName, t.size, t.modifiedTime), t => t.uuid);
 
             _reporter.Report("Scanning Custom folder", forceShow: true);
             files.AddRange(ScanFolder(rootDir, "Custom"));
@@ -96,18 +98,18 @@ public sealed class ScanFilesOperation : IScanFilesOperation
         foreach (var freeFile in files
                      .SelfAndChildren()
                      .Where(t => t.ExtLower is ".vmi" or ".vam" || KnownNames.IsPotentialJsonFile(t.ExtLower))) {
-            if (!_uuidCache.TryGetValue(freeFile.SourcePathIfSoftLink ?? freeFile.FullPath, out var uuidEntry)) {
+
+            var fileName = Path.GetFileName(freeFile.SourcePathIfSoftLink ?? freeFile.FullPath);
+            if (!_uuidCache.TryGetValue(new DatabaseFileKey(fileName, freeFile.Size, freeFile.ModifiedTimestamp), out var uuidEntry)) {
                 freeFile.Dirty = true;
                 continue;
             }
 
-            if (freeFile.Size != uuidEntry.size || uuidEntry.modifiedTime != freeFile.ModifiedTimestamp) {
-                freeFile.Dirty = true;
-            } else if (!string.IsNullOrEmpty(uuidEntry.uuid)) {
+            if (!string.IsNullOrEmpty(uuidEntry)) {
                 if (freeFile.ExtLower == ".vmi") {
-                    freeFile.MorphName = uuidEntry.uuid;
+                    freeFile.MorphName = uuidEntry;
                 } else if (freeFile.ExtLower == ".vam") {
-                    freeFile.InternalId = uuidEntry.uuid;
+                    freeFile.InternalId = uuidEntry;
                 }
             }
         }

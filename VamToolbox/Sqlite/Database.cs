@@ -63,13 +63,13 @@ public sealed class Database : IDatabase
 
         _connection.Execute($"Create Table {FilesTable} (" +
                             "Id integer PRIMARY KEY AUTOINCREMENT NOT NULL," +
-                            "Path TEXT collate nocase NOT NULL," +
-                            "LocalPath TEXT NOT NULL," +
+                            "FileName TEXT collate nocase NOT NULL," +
+                            "LocalPath TEXT collate nocase NOT NULL," +
                             "Uuid TEXT collate nocase," +
                             "FileSize integer NOT NULL," +
                             "ModifiedTime integer NOT NULL);");
 
-        _connection.Execute($"CREATE UNIQUE INDEX IX_Files ON {FilesTable}(Path, LocalPath);");
+        _connection.Execute($"CREATE UNIQUE INDEX IX_Files ON {FilesTable}(FileName, LocalPath, FileSize, ModifiedTime);");
     }
 
     private bool TableExists(string tableName)
@@ -79,51 +79,23 @@ public sealed class Database : IDatabase
         return string.IsNullOrEmpty(tableName) || foundTable != tableName;
     }
 
-    public async Task AddHashes(ConcurrentDictionary<(string fullPath, string localAssetPath), string> hashes)
-    {
-        await using var transaction = await _connection.BeginTransactionAsync();
-        var command = _connection.CreateCommand();
-        command.CommandText =
-            @"INSERT INTO hashes VALUES($fullPath, $localAssetPath, $hash) ";
-
-        var parameterFullPath = command.CreateParameter();
-        parameterFullPath.ParameterName = "$fullPath";
-        command.Parameters.Add(parameterFullPath);
-        var parameterAsset = command.CreateParameter();
-        parameterAsset.ParameterName = "$localAssetPath";
-        command.Parameters.Add(parameterAsset);
-        var parameterHash = command.CreateParameter();
-        parameterHash.ParameterName = "$hash";
-        command.Parameters.Add(parameterHash);
-
-        // Insert a lot of data
-        foreach (var hash in hashes) {
-            parameterFullPath.Value = hash.Key.fullPath;
-            parameterAsset.Value = hash.Key.localAssetPath;
-            parameterHash.Value = hash.Value;
-            await command.ExecuteNonQueryAsync();
-        }
-
-        await transaction.CommitAsync();
-    }
-
     public IEnumerable<ReferenceEntry> ReadReferenceCache()
     {
         return _connection.Query<ReferenceEntry>(
-            $"select file.Path as FilePath, file.LocalPath as LocalPath, ref.Value, ref.[Index], ref.Length, ref.MorphName, ref.InternalId from {FilesTable} file " +
+            $"select file.FileName, file.LocalPath, file.FileSize, file.ModifiedTime as FileModifiedTime, ref.Value, ref.[Index], ref.Length, ref.MorphName, ref.InternalId from {FilesTable} file " +
             $"left join {RefTable} ref on file.Id = ref.ParentFileId ");
     }
 
-    public IEnumerable<(string fullPath, string localPath, long size, DateTime modifiedTime, string? uuid)> ReadVarFilesCache()
+    public IEnumerable<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid)> ReadVarFilesCache()
     {
         return _connection.Query<(string, string, long, DateTime, string?)>(
-            $"select Path, LocalPath, FileSize, ModifiedTime, Uuid from {FilesTable} where LocalPath is not ''");
+            $"select FileName, LocalPath, FileSize, ModifiedTime, Uuid from {FilesTable} where LocalPath is not ''");
     }
 
-    public IEnumerable<(string fullPath, long size, DateTime modifiedTime, string? uuid)> ReadFreeFilesCache()
+    public IEnumerable<(string fileName, long size, DateTime modifiedTime, string? uuid)> ReadFreeFilesCache()
     {
         return _connection.Query<(string, long, DateTime, string?)>(
-            $"select Path, FileSize, ModifiedTime, Uuid from {FilesTable} where LocalPath is ''");
+            $"select FileName, FileSize, ModifiedTime, Uuid from {FilesTable} where LocalPath is ''");
     }
 
     public void UpdateReferences(Dictionary<FileReferenceBase, long> batch, List<(FileReferenceBase file, IEnumerable<Reference> references)> jsonFiles)
@@ -179,11 +151,11 @@ public sealed class Database : IDatabase
     {
         using var transaction = _connection.BeginTransaction();
         var commandInsert = _connection.CreateCommand();
-        commandInsert.CommandText = $"insert or replace into {FilesTable} (Path, LocalPath, Uuid, FileSize, ModifiedTime) VALUES ($fullPath, $localPath, $uuid, $size, $timestamp); SELECT last_insert_rowid();";
+        commandInsert.CommandText = $"insert or replace into {FilesTable} (FileName, LocalPath, Uuid, FileSize, ModifiedTime) VALUES ($fileName, $localPath, $uuid, $size, $timestamp); SELECT last_insert_rowid();";
 
-        var paramFullPath = commandInsert.CreateParameter();
-        paramFullPath.ParameterName = "$fullPath";
-        commandInsert.Parameters.Add(paramFullPath);
+        var paramFileName = commandInsert.CreateParameter();
+        paramFileName.ParameterName = "$fileName";
+        commandInsert.Parameters.Add(paramFileName);
         var localPath = commandInsert.CreateParameter();
         localPath.ParameterName = "$localPath";
         commandInsert.Parameters.Add(localPath);
@@ -198,11 +170,11 @@ public sealed class Database : IDatabase
         commandInsert.Parameters.Add(paramTimestamp);
 
         foreach (var file in files.Keys) {
-            paramFullPath.Value = file.IsVar ? file.Var.SourcePathIfSoftLink ?? file.Var.FullPath : file.Free.SourcePathIfSoftLink ?? file.Free.FullPath;
+            paramFileName.Value = Path.GetFileName(file.IsVar ? file.Var.SourcePathIfSoftLink ?? file.Var.FullPath : file.Free.SourcePathIfSoftLink ?? file.Free.FullPath);
             localPath.Value = (object?)(file.IsVar ? file.VarFile.LocalPath : null) ?? string.Empty;
             uuid.Value = (object?)(file.MorphName ?? file.InternalId) ?? DBNull.Value;
-            paramSize.Value = file.Size;
-            paramTimestamp.Value = file.ModifiedTimestamp;
+            paramSize.Value = file.IsVar ? file.Var.Size : file.Size;
+            paramTimestamp.Value = file.IsVar ? file.Var.Modified : file.ModifiedTimestamp;
             files[file] = (long)commandInsert.ExecuteScalar()!;
         }
 

@@ -135,7 +135,7 @@ public class ReferencesResolverTests
     private static VarPackageFile Build(string varName, string localFilePath, bool isInVamDir)
     {
         VarPackageName.TryGet(varName, out var name);
-        var varPackage = new VarPackage(name!, "D:/" + name!.Filename, null, isInVamDir, 1);
+        var varPackage = new VarPackage(name!, "D:/" + name!.Filename, null, isInVamDir, 1, DateTime.UtcNow);
         return new VarPackageFile(localFilePath, 1, isInVamDir, varPackage, DateTime.Now);
     }
 

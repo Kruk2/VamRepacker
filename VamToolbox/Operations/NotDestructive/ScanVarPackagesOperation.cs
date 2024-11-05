@@ -30,7 +30,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
     private int _totalVarsCount;
     private OperationContext _context = null!;
     private readonly IDatabase _database;
-    private FrozenDictionary<string, FrozenDictionary<string, (long size, DateTime modifiedTime, string? uuid)>> _uuidCache = null!;
+    private FrozenDictionary<DatabaseFileKey, FrozenDictionary<string, string?>> _uuidCache = null!;
 
     public ScanVarPackagesOperation(IFileSystem fs, IProgressTracker progressTracker, ILogger logger, IFileGroupers groupers, ISoftLinker softLinker, IDatabase database, IFavAndHiddenGrouper favHideenGrouper)
     {
@@ -51,7 +51,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
 
         var stopWatch = new Stopwatch();
         stopWatch.Start();
-        var packageFiles = await InitLookups(freeFiles);
+        var packageFiles = await InitLookups();
 
         var scanPackageBlock = CreateBlock();
         foreach (var packageFile in packageFiles) {
@@ -102,7 +102,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
         return _result.Vars;
     }
 
-    private Task<IEnumerable<(string path, string? softLink)>> InitLookups(IEnumerable<FreeFile> freeFiles)
+    private Task<IEnumerable<(string path, string? softLink)>> InitLookups()
     {
         return Task.Run(() => {
             var packageFiles = _fs.Directory
@@ -115,11 +115,10 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
             _totalVarsCount = packageFiles.Count;
 
             _uuidCache = _database.ReadVarFilesCache()
-                .GroupBy(t => t.fullPath, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(t => new DatabaseFileKey(t.fileName, t.size, t.modifiedTime))
                 .ToFrozenDictionary(
                     t => t.Key,
-                    t => t.ToFrozenDictionary(x => x.localPath, x => (x.size, x.modifiedTime, x.uuid)),
-                    StringComparer.OrdinalIgnoreCase);
+                    t => t.ToFrozenDictionary(x => x.localPath, x => x.uuid));
 
             return packageFiles
                 .Select(t => (path: t, softLink: _softLinker.GetSoftLink(t)))
@@ -143,7 +142,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
             varFullPath = varFullPath.NormalizePathSeparators();
             var isInVamDir = varFullPath.StartsWith(_context.VamDir, StringComparison.Ordinal);
             var fileInfo = softLink != null ? _fs.FileInfo.New(softLink) : _fs.FileInfo.New(varFullPath);
-            var varPackage = new VarPackage(name, varFullPath, softLink, isInVamDir, fileInfo.Length);
+            var varPackage = new VarPackage(name, varFullPath, softLink, isInVamDir, fileInfo.Length, fileInfo.LastWriteTimeUtc);
 
             await using var stream = _fs.File.OpenRead(varFullPath);
             using var archive = ZipFile.Read(stream);
@@ -196,19 +195,18 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
         foreach (var varFile in varPackage.Files
                      .SelfAndChildren()
                      .Where(t => t.ExtLower is ".vmi" or ".vam" || KnownNames.IsPotentialJsonFile(t.ExtLower) && t.FilenameLower != "meta.json")) {
-            if (!_uuidCache.TryGetValue(varPackage.SourcePathIfSoftLink ?? varPackage.FullPath, out var cacheEntry) ||
+            var varPackageFileName = Path.GetFileName(varPackage.SourcePathIfSoftLink ?? varPackage.FullPath);
+            if (!_uuidCache.TryGetValue(new DatabaseFileKey(varPackageFileName, varPackage.Size, varPackage.Modified), out var cacheEntry) ||
                 !cacheEntry.TryGetValue(varFile.LocalPath, out var uuidEntry)) {
                 varFile.Dirty = true;
                 continue;
             }
 
-            if (varFile.Size != uuidEntry.size || uuidEntry.modifiedTime != varFile.ModifiedTimestamp) {
-                varFile.Dirty = true;
-            } else if (!string.IsNullOrEmpty(uuidEntry.uuid)) {
+            if (!string.IsNullOrEmpty(uuidEntry)) {
                 if (varFile.ExtLower == ".vmi") {
-                    varFile.MorphName = uuidEntry.uuid;
+                    varFile.MorphName = uuidEntry;
                 } else if (varFile.ExtLower == ".vam") {
-                    varFile.InternalId = uuidEntry.uuid;
+                    varFile.InternalId = uuidEntry;
                 }
             }
         }

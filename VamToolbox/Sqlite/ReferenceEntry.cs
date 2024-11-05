@@ -10,6 +10,8 @@ public sealed class ReferenceEntry
     public int Length { get; init; }
     public string? MorphName { get; set; }
     public string? InternalId { get; set; }
-    public string FilePath { get; set; } = null!;
+    public string FileName { get; set; } = null!;
+    public DateTime FileModifiedTime { get; set; }
+    public long FileSize { get; set; }
     public string LocalPath { get; set; } = null!;
 }

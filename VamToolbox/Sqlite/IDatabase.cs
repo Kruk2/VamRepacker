@@ -8,8 +8,8 @@ namespace VamToolbox.Sqlite;
 public interface IDatabase : IDisposable
 {
     IEnumerable<ReferenceEntry> ReadReferenceCache();
-    IEnumerable<(string fullPath, string localPath, long size, DateTime modifiedTime, string? uuid)> ReadVarFilesCache();
-    IEnumerable<(string fullPath, long size, DateTime modifiedTime, string? uuid)> ReadFreeFilesCache();
+    IEnumerable<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid)> ReadVarFilesCache();
+    IEnumerable<(string fileName, long size, DateTime modifiedTime, string? uuid)> ReadFreeFilesCache();
 
     public void SaveFiles(Dictionary<FileReferenceBase, long> files);
     void UpdateReferences(Dictionary<FileReferenceBase, long> batch, List<(FileReferenceBase file, IEnumerable<Reference> references)> jsonFiles);

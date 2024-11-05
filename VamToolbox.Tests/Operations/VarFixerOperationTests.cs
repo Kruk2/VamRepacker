@@ -233,7 +233,7 @@ public class VarFixerOperationTests
 
     private Task Execute(bool dryRun = false, bool removeDeps = false, bool disableMorphs = false, bool addMorphFile = false)
     {
-        var varFiles = _fs.AllFiles.Select(t => new VarPackage(_fixture.Create<VarPackageName>(), t, null, false, 0)).ToList();
+        var varFiles = _fs.AllFiles.Select(t => new VarPackage(_fixture.Create<VarPackageName>(), t, null, false, 0, DateTime.UtcNow)).ToList();
         if (addMorphFile) {
             varFiles.ForEach(t => _ = new VarPackageFile(KnownNames.MaleMorphsDir + "/a.vmb", 0, false, t, DateTime.Now));
         } else {
