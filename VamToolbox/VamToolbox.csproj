@@ -13,14 +13,14 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Autofac" Version="8.0.0" />
+		<PackageReference Include="Autofac" Version="8.1.1" />
 		<PackageReference Include="Dapper" Version="2.1.35" />
 		<PackageReference Include="DotNetZip" Version="1.16.0" />
 		<PackageReference Include="FuzzySharp" Version="2.0.2" />
-		<PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.6" />
-		<PackageReference Include="morelinq" Version="4.2.0" />
+		<PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+		<PackageReference Include="morelinq" Version="4.3.0" />
 		<PackageReference Include="RestEase" Version="1.6.4" />
-		<PackageReference Include="System.IO.Abstractions" Version="21.0.22" />
+		<PackageReference Include="System.IO.Abstractions" Version="21.0.29" />
 		<PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
 	</ItemGroup>
 
