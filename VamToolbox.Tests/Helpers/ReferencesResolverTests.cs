@@ -136,7 +136,7 @@ public class ReferencesResolverTests
     {
         VarPackageName.TryGet(varName, out var name);
         var varPackage = new VarPackage(name!, "D:/" + name!.Filename, null, isInVamDir, 1, DateTime.UtcNow);
-        return new VarPackageFile(localFilePath, 1, isInVamDir, varPackage, DateTime.Now);
+        return new VarPackageFile(localFilePath, isInVamDir, varPackage, 1);
     }
 
     private Task Init(params VarPackage[] packages)

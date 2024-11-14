@@ -55,6 +55,6 @@ public class VarPackageTests
 
     private static VarPackageFile CreateFile(string localPath, VarPackage varPackage)
     {
-        return new VarPackageFile(localPath, 1, false, varPackage, DateTime.Now);
+        return new VarPackageFile(localPath, false, varPackage, 1);
     }
 }

@@ -235,9 +235,9 @@ public class VarFixerOperationTests
     {
         var varFiles = _fs.AllFiles.Select(t => new VarPackage(_fixture.Create<VarPackageName>(), t, null, false, 0, DateTime.UtcNow)).ToList();
         if (addMorphFile) {
-            varFiles.ForEach(t => _ = new VarPackageFile(KnownNames.MaleMorphsDir + "/a.vmb", 0, false, t, DateTime.Now));
+            varFiles.ForEach(t => _ = new VarPackageFile(KnownNames.MaleMorphsDir + "/a.vmb", false, t, 0));
         } else {
-            varFiles.ForEach(t => _ = new VarPackageFile(KnownNames.HairPresetsDir + "/a.vam", 0, false, t, DateTime.Now));
+            varFiles.ForEach(t => _ = new VarPackageFile(KnownNames.HairPresetsDir + "/a.vam", false, t, 0));
         }
 
         var fixers = new List<IVarFixer>();

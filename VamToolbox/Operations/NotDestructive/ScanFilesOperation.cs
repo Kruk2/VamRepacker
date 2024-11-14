@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.IO.Abstractions;
+using MoreLinq;
 using VamToolbox.FilesGrouper;
 using VamToolbox.Helpers;
 using VamToolbox.Logging;
@@ -18,7 +19,6 @@ public sealed class ScanFilesOperation : IScanFilesOperation
     private readonly IDatabase _database;
     private OperationContext _context = null!;
     private readonly ISoftLinker _softLinker;
-    private FrozenDictionary<DatabaseFileKey, string?> _uuidCache = null!;
 
     public ScanFilesOperation(IProgressTracker reporter, IFileSystem fs, ILogger logger, IFileGroupers groupers, IDatabase database, ISoftLinker softLinker)
     {
@@ -51,34 +51,28 @@ public sealed class ScanFilesOperation : IScanFilesOperation
         var files = new List<FreeFile>();
 
         await Task.Run(async () => {
-            _uuidCache = _database
+            var freeFileCache = _database
                 .ReadFreeFilesCache()
-                .ToFrozenDictionary(t => new DatabaseFileKey(t.fileName, t.size, t.modifiedTime), t => t.uuid);
+                .ToFrozenDictionary(t => new DatabaseFileKey(t.fileName, t.size, t.modifiedTime, string.Empty), t => t.uuid);
 
             _reporter.Report("Scanning Custom folder", forceShow: true);
             files.AddRange(ScanFolder(rootDir, "Custom"));
             _reporter.Report("Scanning Saves folder", forceShow: true);
             files.AddRange(ScanFolder(rootDir, "Saves"));
 
-            _reporter.Report("Analyzing fav files", forceShow: true);
-            Stream OpenFileStream(string p) => _fs.File.OpenRead(_fs.Path.Combine(rootDir, p));
-
             _reporter.Report("Updating local database", forceShow: true);
-            LookupDirtyFiles(files);
-
-            _reporter.Report("Grouping files", forceShow: true);
-            await _groupers.Group(files, OpenFileStream);
+            await GroupFiles(freeFileCache, files, rootDir);
 
         });
 
         return files;
     }
 
-    private IEnumerable<FreeFile> ScanFolder(string rootDir, string folder)
+    private List<FreeFile> ScanFolder(string rootDir, string folder)
     {
         var searchDir = _fs.Path.Combine(rootDir, folder);
         if (!Directory.Exists(searchDir))
-            return Enumerable.Empty<FreeFile>();
+            return [];
 
         var isVamDir = _context.VamDir == rootDir;
         var files = _fs.Directory
@@ -93,26 +87,30 @@ public sealed class ScanFilesOperation : IScanFilesOperation
         return files;
     }
 
-    private void LookupDirtyFiles(List<FreeFile> files)
+    private async Task GroupFiles(
+        FrozenDictionary<DatabaseFileKey, string?> freeFileCache,
+        List<FreeFile> files, 
+        string rootDir)
     {
-        foreach (var freeFile in files
-                     .SelfAndChildren()
-                     .Where(t => t.ExtLower is ".vmi" or ".vam" || KnownNames.IsPotentialJsonFile(t.ExtLower))) {
-
-            var fileName = Path.GetFileName(freeFile.SourcePathIfSoftLink ?? freeFile.FullPath);
-            if (!_uuidCache.TryGetValue(new DatabaseFileKey(fileName, freeFile.Size, freeFile.ModifiedTimestamp), out var uuidEntry)) {
+        foreach (var freeFile in files)
+        {
+            if (!freeFileCache.TryGetValue(new DatabaseFileKey(freeFile.LocalPath, freeFile.Size, freeFile.ModifiedTimestamp, string.Empty), out var uuid)) {
                 freeFile.Dirty = true;
                 continue;
             }
 
-            if (!string.IsNullOrEmpty(uuidEntry)) {
+            if (!string.IsNullOrEmpty(uuid)) {
                 if (freeFile.ExtLower == ".vmi") {
-                    freeFile.MorphName = uuidEntry;
+                    freeFile.MorphName = uuid;
                 } else if (freeFile.ExtLower == ".vam") {
-                    freeFile.InternalId = uuidEntry;
+                    freeFile.InternalId = uuid;
                 }
             }
         }
+
+        // it is possible that one of the child files was modified and we will not merge them so let's skip cache
+        Stream OpenFileStream(string p) => _fs.File.OpenRead(_fs.Path.Combine(rootDir, p));
+        await _groupers.Group(files, OpenFileStream);
     }
 }
 

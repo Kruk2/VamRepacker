@@ -42,7 +42,7 @@ public class FavAndHiddenGrouperTests
         varFileWithoutFav.FavFilePath.Should().BeNull();
     }
 
-    private VarPackageFile CreateVarFile(VarPackage package, string localFile, string? morphName = null) => new VarPackageFile(localFile, 0, false, package, DateTime.Now) {
+    private VarPackageFile CreateVarFile(VarPackage package, string localFile, string? morphName = null) => new VarPackageFile(localFile, false, package, 0) {
         MorphName = morphName ?? Path.GetFileNameWithoutExtension(localFile)
     };
 

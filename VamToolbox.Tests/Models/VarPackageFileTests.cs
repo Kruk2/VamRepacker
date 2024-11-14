@@ -7,10 +7,10 @@ namespace VamToolbox.Tests.Models;
 public class VarPackageFileTests
 {
     [Theory, CustomAutoData]
-    public void Create_ShouldInitAllProperties(long size, DateTime modificationDate, bool isInVamDir, VarPackage varPackage)
+    public void Create_ShouldInitAllProperties(long size, bool isInVamDir, VarPackage varPackage)
     {
         var fakeLocalPath = @"q\e/smtH.assetbundlE";
-        var file = new VarPackageFile(fakeLocalPath, size, isInVamDir, varPackage, modificationDate);
+        var file = new VarPackageFile(fakeLocalPath, isInVamDir, varPackage, size);
 
         using var _ = new AssertionScope();
         file.ParentVar.Should().Be(varPackage);
@@ -26,7 +26,6 @@ public class VarPackageFileTests
         file.FilenameWithoutExt.Should().Be("smtH");
         file.InternalId.Should().BeNullOrEmpty();
         file.MorphName.Should().BeNullOrEmpty();
-        file.ModifiedTimestamp.Should().Be(modificationDate);
         file.Var.Should().Be(varPackage);
         file.VarFile.Should().Be(file);
         file.Free.Should().BeNull();

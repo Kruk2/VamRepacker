@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Formats.Tar;
 using System.IO.Abstractions;
 using System.Threading.Tasks.Dataflow;
 using Ionic.Zip;
@@ -22,7 +23,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
     private readonly ILogger _logger;
     private readonly IFileGroupers _groupers;
     private readonly ISoftLinker _softLinker;
-    private IFavAndHiddenGrouper _favHideenGrouper;
+    private IFavAndHiddenGrouper _favHiddenGrouper;
     private readonly ConcurrentBag<VarPackage> _packages = new();
     private readonly VarScanResults _result = new();
 
@@ -30,9 +31,9 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
     private int _totalVarsCount;
     private OperationContext _context = null!;
     private readonly IDatabase _database;
-    private FrozenDictionary<DatabaseFileKey, FrozenDictionary<string, string?>> _uuidCache = null!;
+    private FrozenDictionary<DatabaseVarKey, List<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid, long varLocalFileSize, string? parentLocalPath)>> _varCache = null!;
 
-    public ScanVarPackagesOperation(IFileSystem fs, IProgressTracker progressTracker, ILogger logger, IFileGroupers groupers, ISoftLinker softLinker, IDatabase database, IFavAndHiddenGrouper favHideenGrouper)
+    public ScanVarPackagesOperation(IFileSystem fs, IProgressTracker progressTracker, ILogger logger, IFileGroupers groupers, ISoftLinker softLinker, IDatabase database, IFavAndHiddenGrouper favHiddenGrouper)
     {
         _fs = fs;
         _reporter = progressTracker;
@@ -40,7 +41,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
         _groupers = groupers;
         _softLinker = softLinker;
         _database = database;
-        _favHideenGrouper = favHideenGrouper;
+        _favHiddenGrouper = favHiddenGrouper;
     }
 
     public async Task<List<VarPackage>> ExecuteAsync(OperationContext context, List<FreeFile> freeFiles)
@@ -86,7 +87,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
             .ToList();
 
         _reporter.Report("Grouping fav/hidden files", forceShow: true);
-        await _favHideenGrouper.Group(freeFiles, _result.Vars);
+        await _favHiddenGrouper.Group(freeFiles, _result.Vars);
 
         var endingMessage = $"Found {_result.Vars.SelectMany(t => t.Files).Count()} files in {_result.Vars.Count} var packages. Took {stopWatch.Elapsed:hh\\:mm\\:ss}. Check var_scan.log";
         _reporter.Complete(endingMessage);
@@ -114,11 +115,11 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
 
             _totalVarsCount = packageFiles.Count;
 
-            _uuidCache = _database.ReadVarFilesCache()
-                .GroupBy(t => new DatabaseFileKey(t.fileName, t.size, t.modifiedTime))
+            _varCache = _database.ReadVarFilesCache()
+                .GroupBy(t => new DatabaseVarKey(t.fileName, t.size, t.modifiedTime))
                 .ToFrozenDictionary(
                     t => t.Key,
-                    t => t.ToFrozenDictionary(x => x.localPath, x => x.uuid));
+                    t => t.ToList());
 
             return packageFiles
                 .Select(t => (path: t, softLink: _softLinker.GetSoftLink(t)))
@@ -143,44 +144,47 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
             var isInVamDir = varFullPath.StartsWith(_context.VamDir, StringComparison.Ordinal);
             var fileInfo = softLink != null ? _fs.FileInfo.New(softLink) : _fs.FileInfo.New(varFullPath);
             var varPackage = new VarPackage(name, varFullPath, softLink, isInVamDir, fileInfo.Length, fileInfo.LastWriteTimeUtc);
+            var varPackageFileName = Path.GetFileName(varPackage.FullPath);
+            var varCacheKey = new DatabaseVarKey(varPackageFileName, varPackage.Size, varPackage.Modified);
+            _varCache.TryGetValue(varCacheKey, out var varCache);
 
-            await using var stream = _fs.File.OpenRead(varFullPath);
-            using var archive = ZipFile.Read(stream);
-            archive.CaseSensitiveRetrieval = true;
+            if (varCache != null) {
+                ReadVarFromCache(varCache, varPackage);
+            } else {
+                await using var stream = _fs.File.OpenRead(varFullPath);
+                using var archive = ZipFile.Read(stream);
+                archive.CaseSensitiveRetrieval = true;
 
-            var foundMetaFile = false;
-            foreach (var entry in archive.Entries) {
-                if (entry.IsDirectory) continue;
-                if (entry.FileName == "meta.json" + KnownNames.BackupExtension) continue;
-                if (entry.FileName == "meta.json") {
-                    try {
-                        await ReadMetaFile(entry);
-                    } catch (Exception e) when (e is ArgumentException or JsonReaderException or JsonSerializationException) {
-                        var message = $"{varFullPath}: {e.Message}";
-                        _result.InvalidVars.Add(message);
+                var foundMetaFile = false;
+                foreach (var entry in archive.Entries) {
+                    if (entry.IsDirectory) continue;
+                    if (entry.FileName == "meta.json" + KnownNames.BackupExtension) continue;
+                    if (entry.FileName == "meta.json") {
+                        try {
+                            await ReadMetaFile(entry);
+                        } catch (Exception e) when (e is ArgumentException or JsonReaderException or JsonSerializationException) {
+                            var message = $"{varFullPath}: {e.Message}";
+                            _result.InvalidVars.Add(message);
+                        }
+
+                        foundMetaFile = true;
+                        continue;
                     }
 
-                    foundMetaFile = true;
-                    continue;
+                    CreatePackageFileAsync(entry, varPackage);
+                }
+                if (!foundMetaFile) {
+                    _result.MissingMetaJson.Add(varFullPath);
+                    return;
                 }
 
-                CreatePackageFileAsync(entry, isInVamDir, entry.LastModified, varPackage);
-            }
-            if (!foundMetaFile) {
-                _result.MissingMetaJson.Add(varFullPath);
-                return;
+                var entries = archive.Entries.ToFrozenDictionary(t => t.FileName.NormalizePathSeparators());
+                Stream OpenFileStream(string p) => entries[p].OpenReader();
+                await _groupers.Group((List<VarPackageFile>)varPackage.Files, OpenFileStream);
             }
 
-            var varFilesList = (List<VarPackageFile>)varPackage.Files;
             _packages.Add(varPackage);
-
-            var entries = archive.Entries.ToFrozenDictionary(t => t.FileName.NormalizePathSeparators());
-            Stream OpenFileStream(string p) => entries[p].OpenReader();
-
-            LookupDirtyPackages(varPackage);
-
             _reporter.Report("Grouping files", forceShow: true);
-            await _groupers.Group(varFilesList, OpenFileStream);
 
         } catch (Exception exc) {
             var message = $"{varFullPath}: {exc.Message}";
@@ -190,26 +194,32 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
         _reporter.Report(new ProgressInfo(Interlocked.Increment(ref _scanned), _totalVarsCount, name.Filename));
     }
 
-    private void LookupDirtyPackages(VarPackage varPackage)
+    private static void ReadVarFromCache(List<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid, long varLocalFileSize, string? parentLocalPath)> varCache, VarPackage varPackage)
     {
-        foreach (var varFile in varPackage.Files
-                     .SelfAndChildren()
-                     .Where(t => t.ExtLower is ".vmi" or ".vam" || KnownNames.IsPotentialJsonFile(t.ExtLower) && t.FilenameLower != "meta.json")) {
-            var varPackageFileName = Path.GetFileName(varPackage.SourcePathIfSoftLink ?? varPackage.FullPath);
-            if (!_uuidCache.TryGetValue(new DatabaseFileKey(varPackageFileName, varPackage.Size, varPackage.Modified), out var cacheEntry) ||
-                !cacheEntry.TryGetValue(varFile.LocalPath, out var uuidEntry)) {
-                varFile.Dirty = true;
-                continue;
-            }
-
-            if (!string.IsNullOrEmpty(uuidEntry)) {
+        foreach (var (_, localPath, size, _, uuid, _, _) in varCache)
+        {
+            var varFile = new VarPackageFile(localPath.NormalizePathSeparators(), varPackage.IsInVaMDir, varPackage, size);
+            if (!string.IsNullOrEmpty(uuid)) {
                 if (varFile.ExtLower == ".vmi") {
-                    varFile.MorphName = uuidEntry;
+                    varFile.MorphName = uuid;
                 } else if (varFile.ExtLower == ".vam") {
-                    varFile.InternalId = uuidEntry;
+                    varFile.InternalId = uuid;
                 }
             }
         }
+
+        var filesMovedAsChildren = new List<VarPackageFile>();
+        foreach (var (_, localPath, _, _, _, _, parentLocalPath) in varCache) {
+            if(string.IsNullOrEmpty(parentLocalPath))
+                continue;
+
+            var childFile = varPackage.FilesDict[localPath];
+            var parentFile = varPackage.FilesDict[parentLocalPath];
+            parentFile.AddChildren(childFile);
+            filesMovedAsChildren.Add(childFile);
+        }
+
+        ((List<VarPackageFile>)varPackage.Files).RemoveAll(t => filesMovedAsChildren.Contains(t));
     }
 
     private static async Task<MetaFileJson?> ReadMetaFile(ZipEntry metaEntry)
@@ -221,9 +231,10 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
         return serializer.Deserialize<MetaFileJson>(reader);
     }
 
-    private static void CreatePackageFileAsync(ZipEntry entry, bool isInVamDir, DateTime modifiedTimestamp, VarPackage varPackage)
+    private static void CreatePackageFileAsync(ZipEntry entry, VarPackage varPackage)
     {
-        _ = new VarPackageFile(entry.FileName.NormalizePathSeparators(), entry.UncompressedSize, isInVamDir, varPackage, modifiedTimestamp);
+        var varPackageFile = new VarPackageFile(entry.FileName.NormalizePathSeparators(), varPackage.IsInVaMDir, varPackage, entry.UncompressedSize);
+        varPackageFile.Dirty = true;
     }
 }
 

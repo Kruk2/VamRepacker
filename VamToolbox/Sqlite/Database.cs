@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Frozen;
+using System.Diagnostics;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using VamToolbox.Models;
@@ -64,12 +65,14 @@ public sealed class Database : IDatabase
         _connection.Execute($"Create Table {FilesTable} (" +
                             "Id integer PRIMARY KEY AUTOINCREMENT NOT NULL," +
                             "FileName TEXT collate nocase NOT NULL," +
-                            "LocalPath TEXT collate nocase NOT NULL," +
+                            "LocalPath TEXT NOT NULL," +
                             "Uuid TEXT collate nocase," +
                             "FileSize integer NOT NULL," +
+                            "VarLocalFileSize integer NULL," +
+                            "ParentLocalPath TEXT NULL," +
                             "ModifiedTime integer NOT NULL);");
 
-        _connection.Execute($"CREATE UNIQUE INDEX IX_Files ON {FilesTable}(FileName, LocalPath, FileSize, ModifiedTime);");
+        _connection.Execute($"CREATE UNIQUE INDEX IX_Files ON {FilesTable}(FileName, FileSize, ModifiedTime, LocalPath);");
     }
 
     private bool TableExists(string tableName)
@@ -86,19 +89,20 @@ public sealed class Database : IDatabase
             $"left join {RefTable} ref on file.Id = ref.ParentFileId ");
     }
 
-    public IEnumerable<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid)> ReadVarFilesCache()
+    public IEnumerable<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid, long varLocalFileSize, string? parentLocalPath)> ReadVarFilesCache()
     {
-        return _connection.Query<(string, string, long, DateTime, string?)>(
-            $"select FileName, LocalPath, FileSize, ModifiedTime, Uuid from {FilesTable} where LocalPath is not ''");
+        return _connection.Query<(string, string, long, DateTime, string?, long, string?)>(
+            $"select FileName, LocalPath, FileSize, ModifiedTime, Uuid, VarLocalFileSize, ParentLocalPath from {FilesTable} where LocalPath is not ''");
     }
 
-    public IEnumerable<(string fileName, long size, DateTime modifiedTime, string? uuid)> ReadFreeFilesCache()
+    public IEnumerable<(string fileName, long size, DateTime modifiedTime, string? uuid, string? parentLocalPath)> ReadFreeFilesCache()
     {
-        return _connection.Query<(string, long, DateTime, string?)>(
-            $"select FileName, FileSize, ModifiedTime, Uuid from {FilesTable} where LocalPath is ''");
+        return _connection.Query<(string, long, DateTime, string?, string?)>(
+            $"select FileName, FileSize, ModifiedTime, Uuid, ParentLocalPath from {FilesTable} where LocalPath is ''");
     }
 
-    public void UpdateReferences(Dictionary<FileReferenceBase, long> batch, List<(FileReferenceBase file, IEnumerable<Reference> references)> jsonFiles)
+    public void UpdateReferences(Dictionary<DatabaseFileKey, long> batch,
+        List<(DatabaseFileKey file, List<Reference> references)> jsonFiles)
     {
         using var transaction = _connection.BeginTransaction();
         var command = _connection.CreateCommand();
@@ -147,11 +151,12 @@ public sealed class Database : IDatabase
         await _connection.QueryAsync("VACUUM");
     }
 
-    public void SaveFiles(Dictionary<FileReferenceBase, long> files)
+    public Dictionary<DatabaseFileKey, long> SaveFiles(Dictionary<DatabaseFileKey, (string? uuid, long? varLocalFileSizeVal, string? parentFile)> files)
     {
+        var filesIds = new Dictionary<DatabaseFileKey, long>();
         using var transaction = _connection.BeginTransaction();
         var commandInsert = _connection.CreateCommand();
-        commandInsert.CommandText = $"insert or replace into {FilesTable} (FileName, LocalPath, Uuid, FileSize, ModifiedTime) VALUES ($fileName, $localPath, $uuid, $size, $timestamp); SELECT last_insert_rowid();";
+        commandInsert.CommandText = $"insert or replace into {FilesTable} (FileName, LocalPath, Uuid, FileSize, ModifiedTime, VarLocalFileSize, ParentLocalPath) VALUES ($fileName, $localPath, $uuid, $size, $timestamp, $varLocalFileSize, $parentLocalPath); SELECT last_insert_rowid();";
 
         var paramFileName = commandInsert.CreateParameter();
         paramFileName.ParameterName = "$fileName";
@@ -168,17 +173,26 @@ public sealed class Database : IDatabase
         var paramTimestamp = commandInsert.CreateParameter();
         paramTimestamp.ParameterName = "$timestamp";
         commandInsert.Parameters.Add(paramTimestamp);
+        var varLocalFileSize = commandInsert.CreateParameter();
+        varLocalFileSize.ParameterName = "$varLocalFileSize";
+        commandInsert.Parameters.Add(varLocalFileSize);
+        var parentLocalPath = commandInsert.CreateParameter();
+        parentLocalPath.ParameterName = "$parentLocalPath";
+        commandInsert.Parameters.Add(parentLocalPath);
 
-        foreach (var file in files.Keys) {
-            paramFileName.Value = Path.GetFileName(file.IsVar ? file.Var.SourcePathIfSoftLink ?? file.Var.FullPath : file.Free.SourcePathIfSoftLink ?? file.Free.FullPath);
-            localPath.Value = (object?)(file.IsVar ? file.VarFile.LocalPath : null) ?? string.Empty;
-            uuid.Value = (object?)(file.MorphName ?? file.InternalId) ?? DBNull.Value;
-            paramSize.Value = file.IsVar ? file.Var.Size : file.Size;
-            paramTimestamp.Value = file.IsVar ? file.Var.Modified : file.ModifiedTimestamp;
-            files[file] = (long)commandInsert.ExecuteScalar()!;
+        foreach (var (file, (uuidVal, varLocalFileSizeVal, parentFile)) in files) {
+            paramFileName.Value = file.FileName;
+            localPath.Value = file.LocalPath;
+            uuid.Value = (object?)uuidVal ?? DBNull.Value;
+            paramSize.Value = file.Size;
+            paramTimestamp.Value = file.ModifiedTime;
+            varLocalFileSize.Value = varLocalFileSizeVal.HasValue ? varLocalFileSizeVal : DBNull.Value;
+            parentLocalPath.Value = (object?)parentFile ?? DBNull.Value;
+            filesIds[file] = (long)commandInsert.ExecuteScalar()!;
         }
 
         transaction.Commit();
+        return filesIds;
     }
 
     public void Dispose() => _connection.Dispose();
@@ -198,4 +212,6 @@ public sealed class Database : IDatabase
 
         return Newtonsoft.Json.JsonConvert.DeserializeObject<AppSettings>(json) ?? new AppSettings();
     }
+
+    public void Vaccum() => _connection.Query("VACUUM");
 }

@@ -6,6 +6,7 @@ public sealed class FreeFile : FileReferenceBase, IVamObjectWithDependencies
 {
     public string FullPath { get; }
     public string? SourcePathIfSoftLink { get; }
+    public DateTime ModifiedTimestamp { get; }
 
     private readonly List<FreeFile> _children = new();
     public override IReadOnlyCollection<FreeFile> Children => _children.AsReadOnly();
@@ -18,17 +19,22 @@ public sealed class FreeFile : FileReferenceBase, IVamObjectWithDependencies
     public IEnumerable<string> UnresolvedDependencies => JsonFile?.Missing.Select(x => x.EstimatedReferenceLocation + " from " + this) ?? Enumerable.Empty<string>();
 
     public FreeFile(string path, string localPath, long size, bool isInVamDir, DateTime modifiedTimestamp, string? softLinkPath)
-        : base(localPath, size, isInVamDir, modifiedTimestamp)
+        : base(localPath, size, isInVamDir)
     {
         FullPath = path.NormalizePathSeparators();
         SourcePathIfSoftLink = softLinkPath?.NormalizePathSeparators() ?? null;
+        ModifiedTimestamp = modifiedTimestamp;
     }
 
     public override IEnumerable<FreeFile> SelfAndChildren() => base.SelfAndChildren().Cast<FreeFile>();
 
     public override string ToString() => FullPath;
 
-    public override void AddChildren(FileReferenceBase children) => _children.Add((FreeFile)children);
+    public override void AddChildren(FileReferenceBase children)
+    {
+        _children.Add((FreeFile)children);
+        children.ParentFile = this;
+    }
 
     private (List<VarPackage> Var, List<FreeFile> Free) CalculateDeps()
     {
