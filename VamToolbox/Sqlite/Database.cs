@@ -1,6 +1,5 @@
 ﻿using Dapper;
 using Microsoft.Data.Sqlite;
-using System.Diagnostics;
 using VamToolbox.Models;
 
 namespace VamToolbox.Sqlite;
