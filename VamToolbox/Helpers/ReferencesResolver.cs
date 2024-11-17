@@ -1,4 +1,6 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.Frozen;
+using System.Collections.Immutable;
 using System.IO.Abstractions;
 using MoreLinq;
 using VamToolbox.Models;
@@ -15,8 +17,8 @@ public interface IReferencesResolver
 public class ReferencesResolver : IReferencesResolver
 {
     private readonly IFileSystem _fs;
-    private ILookup<string, FreeFile> _freeFilesIndex = null!;
-    private ILookup<string, VarPackage> _varFilesIndex = null!;
+    private FrozenDictionary<string, ImmutableList<FreeFile>> _freeFilesIndex = null!;
+    private FrozenDictionary<string, ImmutableList<VarPackage>> _varFilesIndex = null!;
     private ConcurrentBag<string> _errors = null!;
 
     public ReferencesResolver(IFileSystem fs) => _fs = fs;
@@ -25,8 +27,12 @@ public class ReferencesResolver : IReferencesResolver
 
     private void InitLookupsSync(IList<FreeFile> freeFiles, IList<VarPackage> varFiles, ConcurrentBag<string> errors)
     {
-        _freeFilesIndex = freeFiles.ToLookup(f => f.LocalPath, f => f, StringComparer.InvariantCultureIgnoreCase);
-        _varFilesIndex = varFiles.ToLookup(t => t.Name.PackageNameWithoutVersion, StringComparer.InvariantCultureIgnoreCase);
+        _freeFilesIndex = freeFiles
+            .GroupBy(f => f.LocalPath, f => f, StringComparer.InvariantCultureIgnoreCase)
+            .ToFrozenDictionary(t => t.Key, t => t.ToImmutableList());
+        _varFilesIndex = varFiles
+            .GroupBy(t => t.Name.PackageNameWithoutVersion, StringComparer.InvariantCultureIgnoreCase)
+            .ToFrozenDictionary(t => t.Key, t => t.ToImmutableList());
         _errors = errors;
     }
 
@@ -34,14 +40,14 @@ public class ReferencesResolver : IReferencesResolver
     {
         var refPath = reference.EstimatedReferenceLocation;
         // searching in localSceneFolder for var json files is handled in ScanPackageSceneReference
-        if (!reference.ForJsonFile.IsVar && _freeFilesIndex[_fs.SimplifyRelativePath(localSceneFolder, refPath)] is var f1 && f1.Any()) {
-            f1 = f1.OrderByDescending(t => t.UsedByVarPackagesOrFreeFilesCount).ThenBy(t => t.FullPath);
-            var x = f1.FirstOrDefault(t => t.IsInVaMDir) ?? f1.First();
+        if (!reference.ForJsonFile.IsVar && _freeFilesIndex[_fs.SimplifyRelativePath(localSceneFolder, refPath)] is var f1 && f1.Count > 0) {
+            var matches = f1.OrderByDescending(t => t.UsedByVarPackagesOrFreeFilesCount).ThenBy(t => t.FullPath);
+            var x = matches.FirstOrDefault(t => t.IsInVaMDir) ?? matches.First();
             return new JsonReference(x, reference);
         }
-        if (_freeFilesIndex[refPath] is var f2 && f2.Any()) {
-            f2 = f2.OrderByDescending(t => t.UsedByVarPackagesOrFreeFilesCount).ThenBy(t => t.FullPath);
-            var x = f2.FirstOrDefault(t => t.IsInVaMDir) ?? f2.First();
+        if (_freeFilesIndex[refPath] is var f2 && f2.Count > 0) {
+            var matches = f2.OrderByDescending(t => t.UsedByVarPackagesOrFreeFilesCount).ThenBy(t => t.FullPath);
+            var x = matches.FirstOrDefault(t => t.IsInVaMDir) ?? matches.First();
             return new JsonReference(x, reference);
         }
 
@@ -83,11 +89,12 @@ public class ReferencesResolver : IReferencesResolver
 
     private VarPackage? FindVar(VarPackageName varFile)
     {
-        if (!_varFilesIndex.Contains(varFile.PackageNameWithoutVersion)) {
+        if (!_varFilesIndex.TryGetValue(varFile.PackageNameWithoutVersion, out var possibleVarsToSearchList)) {
             return null;
         }
 
-        var possibleVarsToSearch = _varFilesIndex[varFile.PackageNameWithoutVersion];
+        IEnumerable<VarPackage> possibleVarsToSearch = possibleVarsToSearchList;
+
         if (varFile.MinVersion)
         {
             possibleVarsToSearch = _varFilesIndex[varFile.PackageNameWithoutVersion].Where(t => t.Name.Version >= varFile.Version);

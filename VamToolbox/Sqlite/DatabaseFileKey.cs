@@ -1,6 +1,6 @@
 ﻿namespace VamToolbox.Sqlite;
 
-public record DatabaseFileKey(string FileName, long Size, DateTime ModifiedTime, string LocalPath)
+public record DatabaseFileKey(string FileName, long Size, DateTime ModifiedTime, string? LocalPath)
 {
     public virtual bool Equals(DatabaseFileKey? other)
     {

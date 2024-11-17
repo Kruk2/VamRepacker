@@ -111,7 +111,7 @@ public class PresetGrouperTests
 
         using var _ = new AssertionScope();
         var parentFile = fileGroup.Single(t => t.FilenameLower == "a.vam");
-        parentFile.InternalId.Should().BeNull();
+        parentFile.InternalId.Should().BeEmpty();
     }
 
     private static Stream StreamOpener(string? data = null)

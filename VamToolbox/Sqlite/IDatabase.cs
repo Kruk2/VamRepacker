@@ -1,4 +1,5 @@
-﻿using VamToolbox.Models;
+﻿using System.Collections.Frozen;
+using VamToolbox.Models;
 
 namespace VamToolbox.Sqlite;
 
@@ -8,9 +9,9 @@ public interface IDatabase : IDisposable
     IEnumerable<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid, long varLocalFileSize, string? csFiles)> ReadVarFilesCache();
     IEnumerable<(string fileName, long size, DateTime modifiedTime, string? uuid, string? csFiles)> ReadFreeFilesCache();
 
-    public Dictionary<DatabaseFileKey, long> SaveFiles(
+    public FrozenDictionary<DatabaseFileKey, long> SaveFiles(
         Dictionary<DatabaseFileKey, (string? uuid, long? varLocalFileSizeVal, string? csFiles)> files);
-    void UpdateReferences(Dictionary<DatabaseFileKey, long> batch,
+    void UpdateReferences(FrozenDictionary<DatabaseFileKey, long> batch,
         List<(DatabaseFileKey file, List<Reference> references)> jsonFiles);
 
     Task ClearCache();

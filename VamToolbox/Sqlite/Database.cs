@@ -1,4 +1,5 @@
-﻿using Dapper;
+﻿using System.Collections.Frozen;
+using Dapper;
 using Microsoft.Data.Sqlite;
 using VamToolbox.Models;
 
@@ -21,7 +22,7 @@ public sealed class Database : IDatabase
 
     public void EnsureCreated()
     {
-        _connection.Query("PRAGMA journal_mode=WAL");
+        _connection.Query("PRAGMA journal_mode=WAL;PRAGMA synchronous = OFF; PRAGMA journal_size_limit = 6144000;");
 
         CreateFilesTable();
         CreateJsonReferencesTable();
@@ -98,7 +99,7 @@ public sealed class Database : IDatabase
             $"select FileName, FileSize, ModifiedTime, Uuid, CsFiles from {FilesTable} where LocalPath is ''");
     }
 
-    public void UpdateReferences(Dictionary<DatabaseFileKey, long> batch,
+    public void UpdateReferences(FrozenDictionary<DatabaseFileKey, long> batch,
         List<(DatabaseFileKey file, List<Reference> references)> jsonFiles)
     {
         using var transaction = _connection.BeginTransaction();
@@ -148,12 +149,12 @@ public sealed class Database : IDatabase
         await _connection.QueryAsync("VACUUM");
     }
 
-    public Dictionary<DatabaseFileKey, long> SaveFiles(Dictionary<DatabaseFileKey, (string? uuid, long? varLocalFileSizeVal, string? csFiles)> files)
+    public FrozenDictionary<DatabaseFileKey, long> SaveFiles(
+        Dictionary<DatabaseFileKey, (string? uuid, long? varLocalFileSizeVal, string? csFiles)> files)
     {
-        var filesIds = new Dictionary<DatabaseFileKey, long>();
         using var transaction = _connection.BeginTransaction();
         var commandInsert = _connection.CreateCommand();
-        commandInsert.CommandText = $"insert or replace into {FilesTable} (FileName, LocalPath, Uuid, FileSize, ModifiedTime, VarLocalFileSize, CsFiles) VALUES ($fileName, $localPath, $uuid, $size, $timestamp, $varLocalFileSize, $csFiles); SELECT last_insert_rowid();";
+        commandInsert.CommandText = $"insert or replace into {FilesTable} (FileName, LocalPath, Uuid, FileSize, ModifiedTime, VarLocalFileSize, CsFiles) VALUES ($fileName, $localPath, $uuid, $size, $timestamp, $varLocalFileSize, $csFiles)";
 
         var paramFileName = commandInsert.CreateParameter();
         paramFileName.ParameterName = "$fileName";
@@ -185,11 +186,14 @@ public sealed class Database : IDatabase
             paramTimestamp.Value = file.ModifiedTime;
             varLocalFileSize.Value = varLocalFileSizeVal.HasValue ? varLocalFileSizeVal : DBNull.Value;
             csFilesField.Value = (object?)csFiles ?? DBNull.Value;
-            filesIds[file] = (long)commandInsert.ExecuteScalar()!;
         }
 
         transaction.Commit();
-        return filesIds;
+
+
+        return _connection.Query<(long id, string fileName, long fileSize, DateTime modified, string? localPath)>(
+                $"select Id, FileName, FileSize, ModifiedTime, LocalPath from {FilesTable}")
+            .ToFrozenDictionary(t => new DatabaseFileKey(t.fileName, t.fileSize, t.modified, t.localPath), t => t.id);
     }
 
     public void Dispose() => _connection.Dispose();

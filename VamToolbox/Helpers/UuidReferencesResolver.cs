@@ -1,4 +1,6 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.Frozen;
+using System.Collections.Immutable;
 using VamToolbox.Models;
 
 namespace VamToolbox.Helpers;
@@ -12,9 +14,9 @@ public interface IUuidReferenceResolver
 
 public class UuidReferencesResolver : IUuidReferenceResolver
 {
-    private ILookup<string, FileReferenceBase> _vamFilesById = null!;
-    private ILookup<string, FileReferenceBase> _morphFilesByName = null!;
-    private readonly ConcurrentBag<(JsonFile jsonFile, Reference reference, List<FileReferenceBase> matchedAssets, string uuidOrName)> _delayedReferencesToResolve = [];
+    private FrozenDictionary<string, ImmutableList<FileReferenceBase>> _vamFilesById = null!;
+    private FrozenDictionary<string, ImmutableList<FileReferenceBase>> _morphFilesByName = null!;
+    private readonly ConcurrentBag<(JsonFile jsonFile, Reference reference, ImmutableList<FileReferenceBase> matchedAssets, string uuidOrName)> _delayedReferencesToResolve = [];
     private readonly Dictionary<(string uuidOrName, byte femaleOrMale), FileReferenceBase> _cachedDeleyedVam = new(new CustomUuidComparer());
     private readonly Dictionary<(string uuidOrName, byte femaleOrMale), FileReferenceBase> _cachedDeleyedMorphs = new(new CustomUuidComparer());
 
@@ -49,7 +51,8 @@ public class UuidReferencesResolver : IUuidReferenceResolver
         _vamFilesById = vamFilesFromVars.Cast<FileReferenceBase>()
             .Concat(freeFiles.Where(t => t.InternalId != null && (t.Type & AssetType.ValidClothOrHair) != 0))
             .Where(t => (t.Type & AssetType.ValidClothOrHair) != 0)
-            .ToLookup(t => t.InternalId!);
+            .GroupBy(t => t.InternalId!)
+            .ToFrozenDictionary(t => t.Key, t => t.ToImmutableList());
     }
 
     private void InitMorphNames(IEnumerable<FreeFile> freeFiles, IEnumerable<VarPackage> varFiles)
@@ -61,7 +64,8 @@ public class UuidReferencesResolver : IUuidReferenceResolver
             .Where(t => t.MorphName != null && (t.Type & AssetType.ValidMorph) != 0)
             .Cast<FileReferenceBase>()
             .Concat(morphFilesFromVars)
-            .ToLookup(t => t.MorphName!);
+            .GroupBy(t => t.MorphName!)
+            .ToFrozenDictionary(t => t.Key, t => t.ToImmutableList());
     }
 
     public Task<List<JsonReference>> ResolveDelayedReferences() => Task.Run(ResolveDelayedReferencesSync);
@@ -164,15 +168,28 @@ public class UuidReferencesResolver : IUuidReferenceResolver
         return MatchAssetByUuidOrName(jsonFile, reference.MorphName, reference, _morphFilesByName, fallBackResolvedAsset);
     }
 
-    private (JsonReference? jsonReference, bool isDelayed) MatchAssetByUuidOrName(JsonFile jsonFile, string? uuidOrName,
-        Reference reference, ILookup<string, FileReferenceBase> lookup, FileReferenceBase? fallBackResolvedAsset)
+    private (JsonReference? jsonReference, bool isDelayed) MatchAssetByUuidOrName(
+        JsonFile jsonFile, 
+        string? uuidOrName,
+        Reference reference, 
+        FrozenDictionary<string, ImmutableList<FileReferenceBase>> lookup, 
+        FileReferenceBase? fallBackResolvedAsset)
     {
         if (string.IsNullOrWhiteSpace(uuidOrName))
             throw new VamToolboxException("Invalid displayNameOrUuid");
 
-        var matchedAssets = lookup[uuidOrName].ToList();
-        if (fallBackResolvedAsset is not null && !matchedAssets.Contains(fallBackResolvedAsset)) matchedAssets.Add(fallBackResolvedAsset);
-        FilterAssetsByGender(reference, matchedAssets);
+        if (!lookup.TryGetValue(uuidOrName, out var matchedAssets)) {
+            if (fallBackResolvedAsset is null) {
+                return (null, false);
+            } else {
+                matchedAssets = ImmutableList<FileReferenceBase>.Empty.Add(fallBackResolvedAsset);
+            }
+        }
+        else if (fallBackResolvedAsset is not null && !matchedAssets.Contains(fallBackResolvedAsset)) {
+            matchedAssets = matchedAssets.Add(fallBackResolvedAsset);
+        }
+        
+        matchedAssets = FilterAssetsByGender(reference, matchedAssets);
 
         if (fallBackResolvedAsset is not null && matchedAssets.Any(t => t.SizeWithChildren != fallBackResolvedAsset.SizeWithChildren)) {
             // could be optimized, we can trigger late resolver and see what can be moved to VAM dir
@@ -190,7 +207,7 @@ public class UuidReferencesResolver : IUuidReferenceResolver
 
         // prefer files inside VAM dir
         if (matchedAssets.Any(t => t.IsInVaMDir)) {
-            matchedAssets.RemoveAll(t => !t.IsInVaMDir);
+            matchedAssets = matchedAssets.RemoveAll(t => !t.IsInVaMDir);
         }
 
         if (matchedAssets.Count == 1)
@@ -201,7 +218,7 @@ public class UuidReferencesResolver : IUuidReferenceResolver
         return (null, true);
     }
 
-    private static void FilterAssetsByGender(Reference reference, List<FileReferenceBase> matchedAssets)
+    private static ImmutableList<FileReferenceBase> FilterAssetsByGender(Reference reference, ImmutableList<FileReferenceBase> matchedAssets)
     {
         var isSupportedType = (reference.EstimatedAssetType & AssetType.ValidClothOrHairOrMorph) != 0;
         var isFemaleAsset = reference.EstimatedAssetType.IsFemale();
@@ -216,13 +233,17 @@ public class UuidReferencesResolver : IUuidReferenceResolver
         }
 
         if (isFemaleAsset) {
-            matchedAssets.RemoveAll(x => x.Type.IsMale());
-        } else if (isMaleAsset) {
-            matchedAssets.RemoveAll(x => x.Type.IsFemale());
-        } else {
-            //very rare case where we don't know the gender, prefer females
-            if (matchedAssets.Any(x => x.Type.IsFemale()))
-                matchedAssets.RemoveAll(x => x.Type.IsMale());
+            return matchedAssets.RemoveAll(x => x.Type.IsMale());
         }
+
+        if (isMaleAsset) {
+            return matchedAssets.RemoveAll(x => x.Type.IsFemale());
+        }
+
+        //very rare case where we don't know the gender, prefer females
+        if (matchedAssets.Any(x => x.Type.IsFemale()))
+            return matchedAssets.RemoveAll(x => x.Type.IsMale());
+
+        return matchedAssets;
     }
 }
