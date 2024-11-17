@@ -99,7 +99,6 @@ static class Program
         builder.RegisterType<MorphGrouper>().As<IMorphGrouper>();
         builder.RegisterType<PreviewGrouper>().As<IPreviewGrouper>();
         builder.RegisterType<ScriptGrouper>().As<IScriptGrouper>();
-        builder.RegisterType<JsonUpdater>().As<IJsonUpdater>();
         builder.RegisterType<FavAndHiddenGrouper>().As<IFavAndHiddenGrouper>();
         builder.RegisterType<FileGroupers>().As<IFileGroupers>();
         builder.RegisterType<ReferenceCache>().As<IReferenceCache>();

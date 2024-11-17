@@ -38,7 +38,7 @@ public sealed class CopyMissingVarDependenciesFromRepo : ICopyMissingVarDependen
 
     private void LinkFiles(
         CopyMode mode,
-        IReadOnlyCollection<FreeFile> existingFiles, IReadOnlyCollection<VarPackage> exitingVars)
+        List<FreeFile> existingFiles, List<VarPackage> exitingVars)
     {
         var count = existingFiles.Count + exitingVars.Count;
         var processed = 0;

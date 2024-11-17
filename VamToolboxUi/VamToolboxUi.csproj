@@ -16,7 +16,13 @@
 		<AnalysisMode>Recommended</AnalysisMode>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
+
+		<NoWarn>NU1903</NoWarn>
 	</PropertyGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="System.Drawing.Common" Version="8.0.11" />
+	</ItemGroup>
 
 	<ItemGroup>
 	  <ProjectReference Include="..\VamToolbox\VamToolbox.csproj" />
