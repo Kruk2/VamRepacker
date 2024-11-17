@@ -52,7 +52,7 @@ public sealed class ScanFilesOperation : IScanFilesOperation
         await Task.Run(async () => {
             var freeFileCache = _database
                 .ReadFreeFilesCache()
-                .ToFrozenDictionary(t => new DatabaseFileKey(t.fileName, t.size, t.modifiedTime, string.Empty), t => t.uuid);
+                .ToFrozenDictionary(t => new DatabaseFileKey(t.fileName, t.size, t.modifiedTime, string.Empty), t => (t.uuid, t.csFiles));
 
             _reporter.Report("Scanning Custom folder", forceShow: true);
             files.AddRange(ScanFolder(rootDir, "Custom"));
@@ -87,27 +87,29 @@ public sealed class ScanFilesOperation : IScanFilesOperation
     }
 
     private async Task GroupFiles(
-        FrozenDictionary<DatabaseFileKey, string?> freeFileCache,
+        FrozenDictionary<DatabaseFileKey, (string? uuid, string? csFiles)> freeFileCache,
         List<FreeFile> files, 
         string rootDir)
     {
         foreach (var freeFile in files)
         {
-            if (!freeFileCache.TryGetValue(new DatabaseFileKey(freeFile.LocalPath, freeFile.Size, freeFile.ModifiedTimestamp, string.Empty), out var uuid)) {
+            if (!freeFileCache.TryGetValue(new DatabaseFileKey(freeFile.LocalPath, freeFile.Size, freeFile.ModifiedTimestamp, string.Empty), out var entry)) {
                 freeFile.Dirty = true;
                 continue;
             }
 
-            if (!string.IsNullOrEmpty(uuid)) {
+            if (entry.uuid is not null) {
                 if (freeFile.ExtLower == ".vmi") {
-                    freeFile.MorphName = uuid;
+                    freeFile.MorphName = entry.uuid;
                 } else if (freeFile.ExtLower == ".vam") {
-                    freeFile.InternalId = uuid;
+                    freeFile.InternalId = entry.uuid;
                 }
             }
+
+            if(entry.csFiles is not null)
+                freeFile.CsFiles = entry.csFiles;
         }
 
-        // it is possible that one of the child files was modified and we will not merge them so let's skip cache
         Stream OpenFileStream(string p) => _fs.File.OpenRead(_fs.Path.Combine(rootDir, p));
         await _groupers.Group(files, OpenFileStream);
     }

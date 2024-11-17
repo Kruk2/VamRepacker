@@ -38,7 +38,7 @@ public class ReferenceCache : IReferenceCache
         var allFiles = filesFromVars.Cast<FileReferenceBase>().Concat(filesFromFreeFiles).ToList();
         var total = allFiles.Count + allFiles.Count;
 
-        var bulkInsertFiles = new Dictionary<DatabaseFileKey, (string? uuid, long? varLocalFileSizeVal, string? parentFile)>();
+        var bulkInsertFiles = new Dictionary<DatabaseFileKey, (string? uuid, long? varLocalFileSizeVal, string? csFiles)>();
         var bulkInsertReferences = new List<(DatabaseFileKey file, List<Reference> references)>();
         var allFilesGrouped = allFiles.GroupBy(t =>
             new DatabaseFileKey(
@@ -52,19 +52,15 @@ public class ReferenceCache : IReferenceCache
             bulkInsertFiles[files.Key] = (
                 firstFile.MorphName ?? firstFile.InternalId, 
                 firstFile.IsVar ? firstFile.Size : null,
-                firstFile.ParentFile?.LocalPath);
+                firstFile.CsFiles);
 
             var uniqueMorphs = files.Select(t => t.MorphName ?? t.InternalId).Distinct();
             var uniqueSizes = files.Select(t => t.IsVar ? (long?)t.Size : null).Distinct();
-            var uniqueParents = files.Select(t => t.ParentFile?.LocalPath).Distinct();
             if (uniqueMorphs.Count() != 1) {
                 throw new InvalidOperationException($"Mismatched morphs for {files.Key}");
             }
             if (uniqueSizes.Count() != 1) {
                 throw new InvalidOperationException($"Mismatched sizes for {files.Key}");
-            }
-            if (uniqueParents.Count() != 1) {
-                throw new InvalidOperationException($"Mismatched parents for {files.Key}");
             }
 
             var allFilesReferences = files.Select(t => t.JsonFile is null ? [] : t.JsonFile.References.Select(x => x.Reference).Concat(t.JsonFile.Missing).ToList()).ToList();

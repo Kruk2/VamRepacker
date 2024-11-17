@@ -14,6 +14,7 @@ public abstract class FileReferenceBase
 
     public string? InternalId { get; internal set; }
     public string? MorphName { get; internal set; }
+    public string? CsFiles { get; internal set; }
 
     [MemberNotNullWhen(true, nameof(VarFile))]
     [MemberNotNullWhen(true, nameof(Var))]
@@ -22,8 +23,6 @@ public abstract class FileReferenceBase
     public VarPackage? Var => this is VarPackageFile varFile ? varFile.ParentVar : null;
     public VarPackageFile? VarFile => this as VarPackageFile;
     public FreeFile? Free => this as FreeFile;
-    public FileReferenceBase? ParentFile { get; protected internal set; }
-
     public bool IsInVaMDir { get; }
     public AssetType Type { get; }
 

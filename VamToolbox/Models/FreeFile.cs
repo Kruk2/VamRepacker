@@ -30,11 +30,7 @@ public sealed class FreeFile : FileReferenceBase, IVamObjectWithDependencies
 
     public override string ToString() => FullPath;
 
-    public override void AddChildren(FileReferenceBase children)
-    {
-        _children.Add((FreeFile)children);
-        children.ParentFile = this;
-    }
+    public override void AddChildren(FileReferenceBase children) => _children.Add((FreeFile)children);
 
     private (List<VarPackage> Var, List<FreeFile> Free) CalculateDeps()
     {

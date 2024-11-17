@@ -30,7 +30,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
     private int _totalVarsCount;
     private OperationContext _context = null!;
     private readonly IDatabase _database;
-    private FrozenDictionary<DatabaseVarKey, List<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid, long varLocalFileSize, string? parentLocalPath)>> _varCache = null!;
+    private FrozenDictionary<DatabaseVarKey, List<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid, long varLocalFileSize, string? csFiles)>> _varCache = null!;
 
     public ScanVarPackagesOperation(IFileSystem fs, IProgressTracker progressTracker, ILogger logger, IFileGroupers groupers, ISoftLinker softLinker, IDatabase database, IFavAndHiddenGrouper favHiddenGrouper)
     {
@@ -67,7 +67,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
         await scanPackageBlock.Completion;
 
         _result.Vars = _packages
-            .GroupBy(t => t.Name.Filename)
+            .GroupBy(t => t.Name.Filename, StringComparer.OrdinalIgnoreCase)
             .Select(t => {
                 var sortedVars = t.OrderBy(t => t.FullPath).ToList();
                 if (sortedVars.Count == 1) return sortedVars[0];
@@ -148,7 +148,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
             _varCache.TryGetValue(varCacheKey, out var varCache);
 
             if (varCache != null) {
-                ReadVarFromCache(varCache, varPackage);
+                await ReadVarFromCache(varCache, varPackage);
             } else {
                 await using var stream = _fs.File.OpenRead(varFullPath);
                 using var archive = ZipFile.Read(stream);
@@ -193,32 +193,25 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
         _reporter.Report(new ProgressInfo(Interlocked.Increment(ref _scanned), _totalVarsCount, name.Filename));
     }
 
-    private static void ReadVarFromCache(List<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid, long varLocalFileSize, string? parentLocalPath)> varCache, VarPackage varPackage)
+    private async Task ReadVarFromCache(List<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid, long varLocalFileSize, string? csFiles)> varCache, VarPackage varPackage)
     {
-        foreach (var (_, localPath, size, _, uuid, _, _) in varCache)
+        foreach (var (_, localPath, _, _, uuid, varLocalFileSize, csFiles) in varCache)
         {
-            var varFile = new VarPackageFile(localPath.NormalizePathSeparators(), varPackage.IsInVaMDir, varPackage, size);
-            if (!string.IsNullOrEmpty(uuid)) {
+            var varFile = new VarPackageFile(localPath.NormalizePathSeparators(), varPackage.IsInVaMDir, varPackage, varLocalFileSize);
+            if (uuid is not null) {
                 if (varFile.ExtLower == ".vmi") {
                     varFile.MorphName = uuid;
                 } else if (varFile.ExtLower == ".vam") {
                     varFile.InternalId = uuid;
                 }
             }
+
+            if (csFiles is not null)
+                varFile.CsFiles = csFiles;
         }
 
-        var filesMovedAsChildren = new List<VarPackageFile>();
-        foreach (var (_, localPath, _, _, _, _, parentLocalPath) in varCache) {
-            if(string.IsNullOrEmpty(parentLocalPath))
-                continue;
-
-            var childFile = varPackage.FilesDict[localPath];
-            var parentFile = varPackage.FilesDict[parentLocalPath];
-            parentFile.AddChildren(childFile);
-            filesMovedAsChildren.Add(childFile);
-        }
-
-        ((List<VarPackageFile>)varPackage.Files).RemoveAll(filesMovedAsChildren.Contains);
+        static Stream? OpenFileStream(string _) => null;
+        await _groupers.Group((List<VarPackageFile>)varPackage.Files, OpenFileStream);
     }
 
     private static async Task<MetaFileJson?> ReadMetaFile(ZipEntry metaEntry)

@@ -20,7 +20,7 @@ public class FileGroupers : IFileGroupers
         _previewGrouper = previewGrouper;
     }
 
-    public async Task Group<T>(List<T> files, Func<string, Stream> openFileStream) where T : FileReferenceBase
+    public async Task Group<T>(List<T> files, Func<string, Stream?> openFileStream) where T : FileReferenceBase
     {
         await _scriptGrouper.GroupCslistRefs(files, openFileStream);
         await _morphGrouper.GroupMorphsVmi(files, openFileStream: openFileStream);
@@ -31,5 +31,5 @@ public class FileGroupers : IFileGroupers
 
 public interface IFileGroupers
 {
-    Task Group<T>(List<T> files, Func<string, Stream> openFileStream) where T : FileReferenceBase;
+    Task Group<T>(List<T> files, Func<string, Stream?> openFileStream) where T : FileReferenceBase;
 }

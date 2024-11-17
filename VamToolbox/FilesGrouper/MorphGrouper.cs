@@ -1,7 +1,9 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.IO.Abstractions;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using VamToolbox.Helpers;
 using VamToolbox.Logging;
 using VamToolbox.Models;
@@ -10,11 +12,11 @@ namespace VamToolbox.FilesGrouper;
 
 public interface IMorphGrouper
 {
-    public Task GroupMorphsVmi<T>(List<T> files, Func<string, Stream> openFileStream)
+    public Task GroupMorphsVmi<T>(List<T> files, Func<string, Stream?> openFileStream)
         where T : FileReferenceBase;
 }
 
-public sealed class MorphGrouper : IMorphGrouper
+public sealed partial class MorphGrouper : IMorphGrouper
 {
     private readonly IFileSystem _fs;
     private readonly ILogger _logger;
@@ -25,7 +27,7 @@ public sealed class MorphGrouper : IMorphGrouper
         _logger = logger;
     }
 
-    public async Task GroupMorphsVmi<T>(List<T> files, Func<string, Stream> openFileStream)
+    public async Task GroupMorphsVmi<T>(List<T> files, Func<string, Stream?> openFileStream)
         where T : FileReferenceBase
     {
         var filesMovedAsChildren = new HashSet<T>();
@@ -72,31 +74,19 @@ public sealed class MorphGrouper : IMorphGrouper
             });
     }
 
-    private static readonly JsonSerializerOptions Options = new() {
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true
-    };
+    [GeneratedRegex("['\"]displayName[\"']\\s*:\\s*['\"](.*?)[\"']")]
+    private static partial Regex UuidRegex();
 
-    private async Task<string?> ReadVmiName<T>(T vam, Func<string, Stream> openFileStream) where T : FileReferenceBase
+    private async Task<string?> ReadVmiName<T>(T vam, Func<string, Stream?> openFileStream) where T : FileReferenceBase
     {
-        await using var streamReader = openFileStream(vam.LocalPath);
-        try {
-            var reader = await JsonSerializer.DeserializeAsync<VamFile>(streamReader, Options);
-            if (!string.IsNullOrWhiteSpace(reader?.DisplayName)) {
-                return reader.DisplayName;
-            }
-        } catch (Exception ex) {
-            _logger.Log(ex.ToString());
-        }
+        await using var streamReader = openFileStream(vam.LocalPath) ?? throw new ArgumentNullException(nameof(openFileStream), $"Failed to read vam uuid for {vam}");
+
+        using var stream = new StreamReader(streamReader, Encoding.UTF8);
+        var matchedUuid = UuidRegex().Match(await stream.ReadToEndAsync());
+        if (matchedUuid.Success)
+            return matchedUuid.Groups[1].Value;
 
         _logger.Log($"[MISSING-DISPLAYNAME-VMI] missing name in {vam}");
-        return null;
-    }
-
-    [ExcludeFromCodeCoverage]
-    private class VamFile
-    {
-        [JsonPropertyName("displayName")]
-        public string DisplayName { get; set; } = null!;
+        return string.Empty;
     }
 }

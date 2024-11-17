@@ -175,7 +175,7 @@ namespace VamToolboxUi
             copyMissingDepsFromRepoBtn.Name = "copyMissingDepsFromRepoBtn";
             copyMissingDepsFromRepoBtn.Size = new Size(154, 95);
             copyMissingDepsFromRepoBtn.TabIndex = 13;
-            copyMissingDepsFromRepoBtn.Text = "Search for missing dependencies in VAM and soft-link them from REPO";
+            copyMissingDepsFromRepoBtn.Text = "Search for missing dependencies in VAM and copy/soft-link them from REPO";
             copyMissingDepsFromRepoBtn.UseVisualStyleBackColor = true;
             copyMissingDepsFromRepoBtn.Click += copyMissingDepsFromRepoBtn_Click;
             // 

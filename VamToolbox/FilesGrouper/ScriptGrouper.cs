@@ -1,5 +1,6 @@
 ﻿using System.Collections.Frozen;
 using System.IO.Abstractions;
+using System.Text;
 using VamToolbox.Helpers;
 using VamToolbox.Models;
 
@@ -7,7 +8,7 @@ namespace VamToolbox.FilesGrouper;
 
 public interface IScriptGrouper
 {
-    Task GroupCslistRefs<T>(List<T> files, Func<string, Stream> openFileStream) where T : FileReferenceBase;
+    Task GroupCslistRefs<T>(List<T> files, Func<string, Stream?> openFileStream) where T : FileReferenceBase;
 }
 
 public sealed class ScriptGrouper : IScriptGrouper
@@ -19,7 +20,7 @@ public sealed class ScriptGrouper : IScriptGrouper
         _fs = fs;
     }
 
-    public async Task GroupCslistRefs<T>(List<T> files, Func<string, Stream> openFileStream) where T : FileReferenceBase
+    public async Task GroupCslistRefs<T>(List<T> files, Func<string, Stream?> openFileStream) where T : FileReferenceBase
     {
         var filesMovedAsChildren = new HashSet<T>();
         var filesIndex = files
@@ -27,20 +28,29 @@ public sealed class ScriptGrouper : IScriptGrouper
             .ToFrozenDictionary(f => f.LocalPath);
         foreach (var cslist in files.Where(f => f.ExtLower == ".cslist")) {
             var cslistFolder = _fs.Path.GetDirectoryName(cslist.LocalPath)!;
-            using var streamReader = new StreamReader(openFileStream(cslist.LocalPath));
+            var csFiles = cslist.CsFiles;
 
-            while (!streamReader.EndOfStream) {
-                var cslistRef = (await streamReader.ReadLineAsync())?.Trim();
+            if (csFiles is null) {
+                await using var stream = openFileStream(cslist.LocalPath) ?? throw new ArgumentNullException(nameof(openFileStream), $"Failed to read vam uuid for {cslist}");
+                using var streamReader = new StreamReader(stream, Encoding.UTF8);
+                csFiles = await streamReader.ReadToEndAsync();
+                cslist.CsFiles = csFiles;
+            }
+
+            var stringStream = new StringReader(csFiles);
+            string? cslistRef;
+            while ((cslistRef = await stringStream.ReadLineAsync()) != null)
+            {
+                cslistRef = cslistRef.Trim();
                 if (string.IsNullOrWhiteSpace(cslistRef)) continue;
-                if (filesIndex.TryGetValue(_fs.Path.Combine(cslistFolder, cslistRef).NormalizePathSeparators(), out var f1)) {
+                if (filesIndex.TryGetValue(_fs.Path.Combine(cslistFolder, cslistRef).NormalizePathSeparators(), out var f1))
+                {
                     cslist.AddChildren(f1);
                     filesMovedAsChildren.Add(f1);
-                } else {
+                }
+                else
+                {
                     cslist.AddMissingChildren(cslistRef);
-                    //if(cslist is VarPackageFile varFile)
-                    //    _logger.Log($"[MISSING-SCRIPT] {cslistRef} in {cslist} in {varFile.ToParentVar.Path}");
-                    //else
-                    //    _logger.Log($"[MISSING-SCRIPT] {cslistRef} in {cslist}");
                 }
             }
         }
