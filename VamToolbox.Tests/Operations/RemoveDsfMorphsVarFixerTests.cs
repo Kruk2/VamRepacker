@@ -34,7 +34,7 @@ public class RemoveDsfMorphsVarFixerTests
     {
         var morphs = _fixture.CreateMany<string>().Select(t => t + ".DSF").ToList();
         morphs.AddRange(_fixture.CreateMany<string>().Select(t => t + ".dsf"));
-        morphs.AddRange(new[] { "some_morph.vmb", "other_morph.vmi" });
+        morphs.AddRange(["some_morph.vmb", "other_morph.vmi"]);
         using var zipFile = CreateZip(morphs.ToArray());
 
         var result = RunFixer(var, zipFile);

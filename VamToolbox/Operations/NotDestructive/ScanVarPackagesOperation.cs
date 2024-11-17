@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Formats.Tar;
 using System.IO.Abstractions;
 using System.Threading.Tasks.Dataflow;
 using Ionic.Zip;
@@ -23,8 +22,8 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
     private readonly ILogger _logger;
     private readonly IFileGroupers _groupers;
     private readonly ISoftLinker _softLinker;
-    private IFavAndHiddenGrouper _favHiddenGrouper;
-    private readonly ConcurrentBag<VarPackage> _packages = new();
+    private readonly IFavAndHiddenGrouper _favHiddenGrouper;
+    private readonly ConcurrentBag<VarPackage> _packages = [];
     private readonly VarScanResults _result = new();
 
     private int _scanned;
@@ -55,13 +54,13 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
         var packageFiles = await InitLookups();
 
         var scanPackageBlock = CreateBlock();
-        foreach (var packageFile in packageFiles) {
-            if (!VarPackageName.TryGet(_fs.Path.GetFileName(packageFile.path), out var name)) {
-                _result.InvalidVarName.Add(packageFile.path);
+        foreach (var (path, softLink) in packageFiles) {
+            if (!VarPackageName.TryGet(_fs.Path.GetFileName(path), out var name)) {
+                _result.InvalidVarName.Add(path);
                 continue;
             }
 
-            scanPackageBlock.Post((packageFile.path, packageFile.softLink, name));
+            scanPackageBlock.Post((path, softLink, name));
         }
 
         scanPackageBlock.Complete();
@@ -219,7 +218,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
             filesMovedAsChildren.Add(childFile);
         }
 
-        ((List<VarPackageFile>)varPackage.Files).RemoveAll(t => filesMovedAsChildren.Contains(t));
+        ((List<VarPackageFile>)varPackage.Files).RemoveAll(filesMovedAsChildren.Contains);
     }
 
     private static async Task<MetaFileJson?> ReadMetaFile(ZipEntry metaEntry)
@@ -247,14 +246,14 @@ public interface IScanVarPackagesOperation : IOperation
 public class VarScanResults
 {
 #pragma warning disable CA2227 // Collection properties should be read only
-    public List<VarPackage> Vars { get; set; } = new();
-    public ConcurrentBag<string> InvalidVars { get; } = new();
-    public ConcurrentBag<string> InvalidVarName { get; } = new();
-    public ConcurrentBag<string> MissingMetaJson { get; } = new();
+    public List<VarPackage> Vars { get; set; } = [];
+    public ConcurrentBag<string> InvalidVars { get; } = [];
+    public ConcurrentBag<string> InvalidVarName { get; } = [];
+    public ConcurrentBag<string> MissingMetaJson { get; } = [];
 
-    public ConcurrentBag<string> MissingMorphsFiles { get; } = new();
-    public ConcurrentBag<string> MissingPresetsFiles { get; } = new();
-    public ConcurrentBag<string> MissingScriptFiles { get; } = new();
-    public List<List<string>> DuplicatedVars { get; set; } = new();
+    public ConcurrentBag<string> MissingMorphsFiles { get; } = [];
+    public ConcurrentBag<string> MissingPresetsFiles { get; } = [];
+    public ConcurrentBag<string> MissingScriptFiles { get; } = [];
+    public List<List<string>> DuplicatedVars { get; set; } = [];
 #pragma warning restore CA2227 // Collection properties should be read only
 }

@@ -1,15 +1,7 @@
 ﻿using AutoFixture;
 using FluentAssertions;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Formats.Tar;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VamToolbox.Helpers;
 using VamToolbox.Models;
-using VamToolbox.Operations.Destructive.VarFixers;
 using Xunit;
 
 namespace VamToolbox.Tests.Helpers;
@@ -141,6 +133,6 @@ public class ReferencesResolverTests
 
     private Task Init(params VarPackage[] packages)
     {
-        return _resolver.InitLookups(new List<FreeFile>(), new List<VarPackage>(packages), new ConcurrentBag<string>());
+        return _resolver.InitLookups([], new List<VarPackage>(packages), []);
     }
 }

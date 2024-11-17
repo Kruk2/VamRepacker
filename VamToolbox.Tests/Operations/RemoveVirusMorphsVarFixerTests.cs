@@ -32,7 +32,7 @@ public class RemoveVirusMorphsVarFixerTests
     public void Fix_WhenVarContainsRgMorph_ShouldDeleteThem(VarPackage var)
     {
         var morphs = RemoveVirusMorphsVarFixer.VirusMorphs.ToList();
-        morphs.AddRange(new[] { "some_morph.vmb", "other_morph.vmi" });
+        morphs.AddRange(["some_morph.vmb", "other_morph.vmi"]);
         using var zipFile = CreateZip(morphs.ToArray());
 
         var result = RunFixer(var, zipFile);

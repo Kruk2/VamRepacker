@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Frozen;
+﻿using System.Collections.Frozen;
 using VamToolbox.Logging;
 using VamToolbox.Models;
 using VamToolbox.Operations.Abstract;
@@ -94,8 +93,8 @@ public class ReferenceCache : IReferenceCache
     private void ReadCacheSync(List<PotentialJsonFile> potentialScenes)
     {
         var progress = 0;
-        HashSet<VarPackage> processedVars = new();
-        HashSet<FreeFile> processedFreeFiles = new();
+        HashSet<VarPackage> processedVars = [];
+        HashSet<FreeFile> processedFreeFiles = [];
 
         _progressTracker.Report(new ProgressInfo(0, potentialScenes.Count, "Fetching cache from database", forceShow: true));
 

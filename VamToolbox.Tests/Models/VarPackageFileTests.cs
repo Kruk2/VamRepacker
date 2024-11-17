@@ -19,7 +19,7 @@ public class VarPackageFileTests
         file.IsInVaMDir.Should().Be(true);
         file.IsVar.Should().BeTrue();
         file.Children.Should().BeEmpty();
-        file.SelfAndChildren().Should().BeEquivalentTo(new[] { file });
+        file.SelfAndChildren().Should().BeEquivalentTo([file]);
         file.Dirty.Should().BeFalse();
         file.FilenameLower.Should().Be("smth.assetbundle");
         file.ExtLower.Should().Be(".assetbundle");
@@ -30,7 +30,7 @@ public class VarPackageFileTests
         file.VarFile.Should().Be(file);
         file.Free.Should().BeNull();
         file.ToString().Should().Be($@"q/e/smtH.assetbundlE Var: {varPackage.FullPath}");
-        file.ParentVar.Files.Should().BeEquivalentTo(new[] { file });
+        file.ParentVar.Files.Should().BeEquivalentTo([file]);
     }
 
     [Theory, CustomAutoData]
@@ -38,8 +38,8 @@ public class VarPackageFileTests
     {
         varFile.AddChildren(childFile);
 
-        varFile.Children.Should().BeEquivalentTo(new[] { childFile });
-        varFile.SelfAndChildren().Should().BeEquivalentTo(new[] { childFile, varFile });
+        varFile.Children.Should().BeEquivalentTo([childFile]);
+        varFile.SelfAndChildren().Should().BeEquivalentTo([childFile, varFile]);
         varFile.SizeWithChildren.Should().Be(varFile.Size + childFile.Size);
     }
 
@@ -49,12 +49,12 @@ public class VarPackageFileTests
         freeFile.AddChildren(childFile);
         childFile.AddChildren(childChildFile);
 
-        freeFile.Children.Should().BeEquivalentTo(new[] { childFile });
-        freeFile.SelfAndChildren().Should().BeEquivalentTo(new[] { childFile, freeFile, childChildFile });
+        freeFile.Children.Should().BeEquivalentTo([childFile]);
+        freeFile.SelfAndChildren().Should().BeEquivalentTo([childFile, freeFile, childChildFile]);
         freeFile.SizeWithChildren.Should().Be(freeFile.Size + childFile.Size + childChildFile.Size);
 
-        childFile.Children.Should().BeEquivalentTo(new[] { childChildFile });
-        childFile.SelfAndChildren().Should().BeEquivalentTo(new[] { childFile, childChildFile });
+        childFile.Children.Should().BeEquivalentTo([childChildFile]);
+        childFile.SelfAndChildren().Should().BeEquivalentTo([childFile, childChildFile]);
         childFile.SizeWithChildren.Should().Be(childFile.Size + childChildFile.Size);
     }
 

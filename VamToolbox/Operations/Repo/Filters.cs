@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using VamToolbox.Helpers;
-using VamToolbox.Models;
+﻿using VamToolbox.Helpers;
 
 namespace VamToolbox.Operations.Repo;
 
@@ -29,11 +27,8 @@ public interface IVarFilters
 
 public class VarFilters : IVarFilters
 {
-    private readonly List<string> _dirs = new();
-    private readonly List<string> _files = new();
-
-    private void AddFile(string file) => _files.Add(file);
-    private void AddDir(string file) => _dirs.Add(file);
+    private readonly List<string> _dirs = [];
+    private readonly List<string> _files = [];
 
     public void FromProfile(ProfileModel profile)
     {

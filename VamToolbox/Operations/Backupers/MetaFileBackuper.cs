@@ -5,7 +5,7 @@ using VamToolbox.Helpers;
 using VamToolbox.Logging;
 using VamToolbox.Operations.Abstract;
 
-namespace VamToolbox.Operations.Backups;
+namespace VamToolbox.Operations.Backupers;
 public interface IMetaFileRestorer : IOperation
 {
     Task Restore(OperationContext context);

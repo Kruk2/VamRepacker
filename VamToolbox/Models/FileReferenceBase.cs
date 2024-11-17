@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
-using System.Drawing;
-using VamToolbox.Hashing;
 using VamToolbox.Helpers;
 
 namespace VamToolbox.Models;
@@ -41,7 +39,7 @@ public abstract class FileReferenceBase
     public ConcurrentDictionary<JsonFile, bool> UsedByJsonFiles { get; } = new();
     public int UsedByVarPackagesOrFreeFilesCount => UsedByJsonFiles.Keys.Select(t => t.File.IsVar ? (object)t.File.Var : t.File.Free).Distinct().Count();
     public abstract IReadOnlyCollection<FileReferenceBase> Children { get; }
-    public List<string> MissingChildren { get; } = new();
+    public List<string> MissingChildren { get; } = [];
 
     private long? _sizeWithChildren;
     private bool _dirty;

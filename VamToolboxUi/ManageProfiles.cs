@@ -50,7 +50,7 @@ public partial class ManageProfiles : Form
     {
         var name = AskForName();
         if (string.IsNullOrWhiteSpace(name)) return;
-        var id = profileList.Items.Add(new ProfileModel(new(), new(), name));
+        var id = profileList.Items.Add(new ProfileModel([], [], name));
         profileList.SelectedIndex = id;
     }
 

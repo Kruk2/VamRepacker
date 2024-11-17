@@ -32,6 +32,6 @@ public sealed class PreviewGrouper : IPreviewGrouper
             }
         }
 
-        files.RemoveAll(t => filesMovedAsChildren.Contains(t));
+        files.RemoveAll(filesMovedAsChildren.Contains);
     }
 }

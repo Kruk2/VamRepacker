@@ -8,7 +8,7 @@ public sealed class FreeFile : FileReferenceBase, IVamObjectWithDependencies
     public string? SourcePathIfSoftLink { get; }
     public DateTime ModifiedTimestamp { get; }
 
-    private readonly List<FreeFile> _children = new();
+    private readonly List<FreeFile> _children = [];
     public override IReadOnlyCollection<FreeFile> Children => _children.AsReadOnly();
 
     private List<VarPackage>? _trimmedResolvedVarDependencies;
@@ -16,7 +16,7 @@ public sealed class FreeFile : FileReferenceBase, IVamObjectWithDependencies
     public IReadOnlyList<VarPackage> ResolvedVarDependencies => CalculateDeps().Var;
     public IReadOnlyList<FreeFile> ResolvedFreeDependencies => CalculateDeps().Free;
     public bool AlreadyCalculatedDeps => _trimmedResolvedVarDependencies is not null;
-    public IEnumerable<string> UnresolvedDependencies => JsonFile?.Missing.Select(x => x.EstimatedReferenceLocation + " from " + this) ?? Enumerable.Empty<string>();
+    public IEnumerable<string> UnresolvedDependencies => JsonFile?.Missing.Select(x => x.EstimatedReferenceLocation + " from " + this) ?? [];
 
     public FreeFile(string path, string localPath, long size, bool isInVamDir, DateTime modifiedTimestamp, string? softLinkPath)
         : base(localPath, size, isInVamDir)
@@ -43,7 +43,7 @@ public sealed class FreeFile : FileReferenceBase, IVamObjectWithDependencies
         if (JsonFile is null)
             return (_trimmedResolvedVarDependencies, _trimmedResolvedFreeDependencies) = (Enumerable.Empty<VarPackage>().ToList(), Enumerable.Empty<FreeFile>().ToList());
 
-        return (_trimmedResolvedVarDependencies, _trimmedResolvedFreeDependencies) = DependencyCalculator.CalculateTrimmedDeps(new List<JsonFile> { JsonFile });
+        return (_trimmedResolvedVarDependencies, _trimmedResolvedFreeDependencies) = DependencyCalculator.CalculateTrimmedDeps([JsonFile]);
     }
 
     public void ClearDependencies()

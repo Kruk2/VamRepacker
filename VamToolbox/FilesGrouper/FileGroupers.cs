@@ -1,5 +1,4 @@
-﻿using VamToolbox.Logging;
-using VamToolbox.Models;
+﻿using VamToolbox.Models;
 
 namespace VamToolbox.FilesGrouper;
 

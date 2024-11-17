@@ -6,12 +6,11 @@ namespace VamToolbox.Operations.Destructive.VarFixers;
 
 public class RemoveVirusMorphsVarFixer : IVarFixer
 {
-    public static readonly string[] VirusMorphs = 
-    {
+    public static readonly string[] VirusMorphs = [
         "RG InOut.vmi", "RG InOut.vmb",
         "RG Side2Side.vmi", "RG Side2Side.vmb",
         "RG UpDown2.vmi", "RG UpDown2.vmb"
-    };
+    ];
 
     private readonly ILogger _logger;
     public RemoveVirusMorphsVarFixer(ILogger logger) => _logger = logger;

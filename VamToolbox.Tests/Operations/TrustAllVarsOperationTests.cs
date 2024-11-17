@@ -1,8 +1,6 @@
-﻿using System.IO.Abstractions;
-using System.IO.Abstractions.TestingHelpers;
+﻿using System.IO.Abstractions.TestingHelpers;
 using AutoFixture;
 using FluentAssertions;
-using VamToolbox.Models;
 using VamToolbox.Operations.Abstract;
 using VamToolbox.Operations.Destructive;
 using Xunit;

@@ -20,7 +20,7 @@ public class FreeFileTests
         file.IsInVaMDir.Should().Be(true);
         file.IsVar.Should().BeFalse();
         file.Children.Should().BeEmpty();
-        file.SelfAndChildren().Should().BeEquivalentTo(new[] { file });
+        file.SelfAndChildren().Should().BeEquivalentTo([file]);
         file.Dirty.Should().BeFalse();
         file.FilenameLower.Should().Be("smth.assetbundle");
         file.ExtLower.Should().Be(".assetbundle");
@@ -39,8 +39,8 @@ public class FreeFileTests
     {
         freeFile.AddChildren(childFile);
 
-        freeFile.Children.Should().BeEquivalentTo(new[] { childFile });
-        freeFile.SelfAndChildren().Should().BeEquivalentTo(new[] { childFile, freeFile });
+        freeFile.Children.Should().BeEquivalentTo([childFile]);
+        freeFile.SelfAndChildren().Should().BeEquivalentTo([childFile, freeFile]);
         freeFile.SizeWithChildren.Should().Be(freeFile.Size + childFile.Size);
     }
 
@@ -50,12 +50,12 @@ public class FreeFileTests
         freeFile.AddChildren(childFile);
         childFile.AddChildren(childChildFile);
 
-        freeFile.Children.Should().BeEquivalentTo(new[] { childFile });
-        freeFile.SelfAndChildren().Should().BeEquivalentTo(new[] { childFile, freeFile, childChildFile });
+        freeFile.Children.Should().BeEquivalentTo([childFile]);
+        freeFile.SelfAndChildren().Should().BeEquivalentTo([childFile, freeFile, childChildFile]);
         freeFile.SizeWithChildren.Should().Be(freeFile.Size + childFile.Size + childChildFile.Size);
 
-        childFile.Children.Should().BeEquivalentTo(new[] { childChildFile });
-        childFile.SelfAndChildren().Should().BeEquivalentTo(new[] { childFile, childChildFile });
+        childFile.Children.Should().BeEquivalentTo([childChildFile]);
+        childFile.SelfAndChildren().Should().BeEquivalentTo([childFile, childChildFile]);
         childFile.SizeWithChildren.Should().Be(childFile.Size + childChildFile.Size);
     }
 

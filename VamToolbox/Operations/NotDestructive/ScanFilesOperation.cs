@@ -1,6 +1,5 @@
 using System.Collections.Frozen;
 using System.IO.Abstractions;
-using MoreLinq;
 using VamToolbox.FilesGrouper;
 using VamToolbox.Helpers;
 using VamToolbox.Logging;

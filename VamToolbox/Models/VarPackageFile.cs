@@ -4,7 +4,7 @@ public sealed class VarPackageFile : FileReferenceBase
 {
     public VarPackage ParentVar { get; }
 
-    private readonly List<VarPackageFile> _children = new();
+    private readonly List<VarPackageFile> _children = [];
     public override IReadOnlyCollection<VarPackageFile> Children => _children.AsReadOnly();
 
     public VarPackageFile(string localPath, bool isInVamDir, VarPackage varPackage, long size)

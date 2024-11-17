@@ -57,7 +57,7 @@ public sealed class MorphGrouper : IMorphGrouper
             }
         }
 
-        files.RemoveAll(t => filesMovedAsChildren.Contains(t));
+        files.RemoveAll(filesMovedAsChildren.Contains);
     }
 
     private static IEnumerable<(T?, T?)> GroupMorphs<T>(IEnumerable<T> files) where T : FileReferenceBase

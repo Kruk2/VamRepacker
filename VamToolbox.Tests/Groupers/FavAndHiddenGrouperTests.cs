@@ -31,7 +31,7 @@ public class FavAndHiddenGrouperTests
         var freeFileMorph = CreateFile(freeFiles, KnownNames.FemaleMorphsDir + "/Ass.vmb");
         var freeFileMorphWithoutFav = CreateFile(freeFiles, KnownNames.FemaleGenMorphsDir + "/Ass1.vmb");
 
-        await _grouper.Group(freeFiles, new List<VarPackage> { varPackage });
+        await _grouper.Group(freeFiles, [varPackage]);
 
         using var _ = new AssertionScope();
         freeFiles.Should().NotContain(t => t.ExtLower == ".fav");

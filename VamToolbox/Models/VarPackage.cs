@@ -12,7 +12,7 @@ public sealed class VarPackage : IVamObjectWithDependencies
     public bool IsInVaMDir { get; }
     public DateTime Modified { get; }
 
-    private readonly List<VarPackageFile> _files = new();
+    private readonly List<VarPackageFile> _files = [];
     public IReadOnlyList<VarPackageFile> Files => _files;
 
     private AssetType? _assetType;

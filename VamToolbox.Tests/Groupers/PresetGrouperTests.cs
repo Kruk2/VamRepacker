@@ -124,7 +124,7 @@ public class PresetGrouperTests
 
     private List<FreeFile> CreateGroup(string fileName)
     {
-        return new List<FreeFile> {
+        return [
             new FreeFile("whatever", fileName + ".vab", 0, false, DateTime.Now, null),
             new FreeFile("whatever", fileName + ".vaj", 0, false, DateTime.Now, null),
             new FreeFile("whatever", fileName + ".vam", 0, false, DateTime.Now, null),
@@ -132,7 +132,7 @@ public class PresetGrouperTests
             new FreeFile("whatever", fileName + "_preset1.vap", 0, false, DateTime.Now, null),
             new FreeFile("whatever", fileName + "_preset1.png", 0, false, DateTime.Now, null),
             new FreeFile("whatever", fileName + "_preset2.vap", 0, false, DateTime.Now, null),
-            new FreeFile("whatever", fileName + "_preset2.jpeg", 0, false, DateTime.Now, null),
-        };
+            new FreeFile("whatever", fileName + "_preset2.jpeg", 0, false, DateTime.Now, null)
+        ];
     }
 }

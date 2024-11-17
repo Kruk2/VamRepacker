@@ -23,7 +23,7 @@ public class UuidReferencesResolverTests
         _freeFiles = fixture.CreateMany<FreeFile>().ToList();
         _vars = fixture.CreateMany<VarPackage>().ToList();
 
-        _resolver.InitLookups(Enumerable.Empty<FreeFile>(), Enumerable.Empty<VarPackage>()).GetAwaiter().GetResult();
+        _resolver.InitLookups([], []).GetAwaiter().GetResult();
     }
 
     [Fact]

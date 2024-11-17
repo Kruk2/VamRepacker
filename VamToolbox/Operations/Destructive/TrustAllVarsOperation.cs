@@ -3,7 +3,6 @@ using System.IO.Abstractions;
 using System.Threading.Tasks.Dataflow;
 using Newtonsoft.Json;
 using VamToolbox.Logging;
-using VamToolbox.Models;
 using VamToolbox.Operations.Abstract;
 
 namespace VamToolbox.Operations.Destructive;

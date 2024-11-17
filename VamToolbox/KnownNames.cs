@@ -4,9 +4,9 @@ namespace VamToolbox;
 
 public static class KnownNames
 {
-    public static readonly string[] ExtReferencesToPresets = { ".json", ".vap", ".vaj", ".vam" };
-    public static readonly string[] PreviewExtensions = { ".jpg", ".jpeg", ".png" };
-    public static readonly string[] VirusMorphs = { "RG UpDown2", "RG Side2Side", "RG InOut" };
+    public static readonly string[] ExtReferencesToPresets = [".json", ".vap", ".vaj", ".vam"];
+    public static readonly string[] PreviewExtensions = [".jpg", ".jpeg", ".png"];
+    public static readonly string[] VirusMorphs = ["RG UpDown2", "RG Side2Side", "RG InOut"];
 
     public const string BackupExtension = ".toolboxbak";
     public const string AddonPackagesUserPrefs = "AddonPackagesUserPrefs";
@@ -17,7 +17,7 @@ public static class KnownNames
     public const string FemaleGenMorphsDir = "Custom/Atom/Person/Morphs/female_genitalia";
     public const string MaleMorphsDir = "Custom/Atom/Person/Morphs/male";
     public const string MaleGenMorphsDir = "Custom/Atom/Person/Morphs/male_genitalia";
-    public static readonly string[] MorphDirs = { FemaleMorphsDir, FemaleGenMorphsDir, MaleMorphsDir, MaleGenMorphsDir };
+    public static readonly string[] MorphDirs = [FemaleMorphsDir, FemaleGenMorphsDir, MaleMorphsDir, MaleGenMorphsDir];
 
     public const string FemaleHairDir = "Custom/Hair/Female";
     public const string MaleHairDir = "Custom/Hair/Male";
@@ -40,7 +40,7 @@ public static class KnownNames
     public const string PosePresetsDir = "Custom/Atom/Person/Pose";
     public const string SkinPresetsDir = "Custom/Atom/Person/Skin";
 
-    public static readonly string[] KnownDirs = { 
+    public static readonly string[] KnownDirs = [
         FemaleMorphsDir,FemaleGenMorphsDir,  MaleMorphsDir,  MaleGenMorphsDir, 
         FemaleHairDir,  MaleHairDir, 
         FemaleClothDir, MaleClothDir, SharedClothDir, NeutralClothDir,
@@ -48,7 +48,7 @@ public static class KnownNames
         GlutePhysicsDir, BreastPhysicsDir, PluginsPresetDir,
         AppearancePresetsDir, ClothingPresetsDir,
         HairPresetsDir, PosePresetsDir, SkinPresetsDir
-    };
+    ];
 
     public static bool IsPotentialJsonFile(string ext) => ext is ".json" or ".vap" or ".vaj" or ".uiap";
 

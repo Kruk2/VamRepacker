@@ -14,7 +14,7 @@ public class UuidReferencesResolver : IUuidReferenceResolver
 {
     private ILookup<string, FileReferenceBase> _vamFilesById = null!;
     private ILookup<string, FileReferenceBase> _morphFilesByName = null!;
-    private readonly ConcurrentBag<(JsonFile jsonFile, Reference reference, List<FileReferenceBase> matchedAssets, string uuidOrName)> _delayedReferencesToResolve = new();
+    private readonly ConcurrentBag<(JsonFile jsonFile, Reference reference, List<FileReferenceBase> matchedAssets, string uuidOrName)> _delayedReferencesToResolve = [];
     private readonly Dictionary<(string uuidOrName, byte femaleOrMale), FileReferenceBase> _cachedDeleyedVam = new(new CustomUuidComparer());
     private readonly Dictionary<(string uuidOrName, byte femaleOrMale), FileReferenceBase> _cachedDeleyedMorphs = new(new CustomUuidComparer());
 
@@ -69,7 +69,7 @@ public class UuidReferencesResolver : IUuidReferenceResolver
     private List<JsonReference> ResolveDelayedReferencesSync()
     {
         if (_delayedReferencesToResolve.IsEmpty)
-            return new List<JsonReference>();
+            return [];
 
         var createdReferences = new List<JsonReference>(_delayedReferencesToResolve.Count);
         foreach (var (jsonFile, reference, matchedAssets, uuidOrName) in _delayedReferencesToResolve.OrderByDescending(t => t.jsonFile.File.PreferredForDelayedResolver)) {

@@ -27,7 +27,7 @@ public class VarPackageTests
         var varFile2 = CreateFile("A", varPackage);
 
         using var _ = new AssertionScope();
-        varPackage.Files.Should().BeEquivalentTo(new[] { varFile1, varFile2 });
+        varPackage.Files.Should().BeEquivalentTo([varFile1, varFile2]);
         varPackage.FilesDict.Should().HaveCount(1);
         varPackage.FilesDict.Should().ContainKey("a");
         varPackage.FilesDict.Should().ContainValue(varFile1);

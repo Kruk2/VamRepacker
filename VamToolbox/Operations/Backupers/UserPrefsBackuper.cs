@@ -2,7 +2,7 @@
 using VamToolbox.Logging;
 using VamToolbox.Operations.Abstract;
 
-namespace VamToolbox.Operations.Backups;
+namespace VamToolbox.Operations.Backupers;
 public interface IUserPrefsBackuper : IOperation
 {
     public Task Backup(string vamDir, bool dryRun);

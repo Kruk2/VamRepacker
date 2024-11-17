@@ -19,8 +19,8 @@ public sealed class ScanJsonFilesOperation : IScanJsonFilesOperation
     private readonly IReferenceCache _referenceCache;
     private readonly IUuidReferenceResolver _uuidReferenceResolver;
     private readonly IReferencesResolver _referencesResolver;
-    private readonly ConcurrentBag<JsonFile> _jsonFiles = new();
-    private readonly ConcurrentBag<string> _errors = new();
+    private readonly ConcurrentBag<JsonFile> _jsonFiles = [];
+    private readonly ConcurrentBag<string> _errors = [];
     private int _scanned;
     private int _total;
     private int _unknownErrorsCount;

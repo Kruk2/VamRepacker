@@ -1,5 +1,4 @@
-﻿using System.Collections;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Reflection;
 using Autofac;
 using MoreLinq;
@@ -8,7 +7,7 @@ using VamToolbox.Helpers;
 using VamToolbox.Logging;
 using VamToolbox.Models;
 using VamToolbox.Operations.Abstract;
-using VamToolbox.Operations.Backups;
+using VamToolbox.Operations.Backupers;
 using VamToolbox.Operations.Destructive;
 using VamToolbox.Operations.Destructive.VarFixers;
 using VamToolbox.Operations.NotDestructive;
@@ -25,8 +24,8 @@ public partial class MainWindow : Form, IProgressTracker
     private int _stage, _totalStages;
 
     private readonly ILifetimeScope _ctx;
-    private Dictionary<string, bool> _buttonsState = new();
-    private List<ProfileModel> _profiles = new();
+    private Dictionary<string, bool> _buttonsState = [];
+    private List<ProfileModel> _profiles = [];
 
     private bool _working;
     private readonly Stopwatch _sw = new();
@@ -163,7 +162,7 @@ public partial class MainWindow : Form, IProgressTracker
     });
 
 
-    void SwitchUI(bool working)
+    private void SwitchUI(bool working)
     {
         if (_working == working) return;
         if (working) {
@@ -327,7 +326,7 @@ public partial class MainWindow : Form, IProgressTracker
 
         var ctx = GetContext(stages: 2);
         await using var scope = _ctx.BeginLifetimeScope();
-        var vars = await scope.Resolve<IScanVarPackagesOperation>().ExecuteAsync(ctx, new());
+        var vars = await scope.Resolve<IScanVarPackagesOperation>().ExecuteAsync(ctx, []);
         var fixers = new List<IVarFixer>();
         if(disableMorphPreloadChk.Checked) fixers.Add(scope.Resolve<DisableMorphPreloadVarFixer>());
         if(removeDependenciesFromMetaChk.Checked) fixers.Add(scope.Resolve<RemoveDependenciesVarFixer>());
@@ -401,7 +400,7 @@ public partial class MainWindow : Form, IProgressTracker
         SwitchUI(false);
     }
 
-    private void MoveToStage(string text) => stageTxt.Text = $"{(_stage++) + 1}/{_totalStages} {text}";
+    private void MoveToStage(string text) => stageTxt.Text = $"{_stage++ + 1}/{_totalStages} {text}";
 
     private static bool ArePathsExclusive(string subPath, string subPath1)
     {

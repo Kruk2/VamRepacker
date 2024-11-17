@@ -1,7 +1,6 @@
 ﻿using System.Collections.Frozen;
 using System.IO.Abstractions;
 using VamToolbox.Helpers;
-using VamToolbox.Logging;
 using VamToolbox.Models;
 
 namespace VamToolbox.FilesGrouper;
@@ -14,12 +13,10 @@ public interface IScriptGrouper
 public sealed class ScriptGrouper : IScriptGrouper
 {
     private readonly IFileSystem _fs;
-    private readonly ILogger _logger;
 
-    public ScriptGrouper(IFileSystem fs, ILogger logger)
+    public ScriptGrouper(IFileSystem fs)
     {
         _fs = fs;
-        _logger = logger;
     }
 
     public async Task GroupCslistRefs<T>(List<T> files, Func<string, Stream> openFileStream) where T : FileReferenceBase
@@ -48,6 +45,6 @@ public sealed class ScriptGrouper : IScriptGrouper
             }
         }
 
-        files.RemoveAll(t => filesMovedAsChildren.Contains(t));
+        files.RemoveAll(filesMovedAsChildren.Contains);
     }
 }

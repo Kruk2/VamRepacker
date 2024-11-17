@@ -1,11 +1,9 @@
-using VamToolbox.Helpers;
-
 namespace VamToolbox.Models;
 
 public sealed class JsonFile
 {
-    private readonly List<JsonReference> _references = new();
-    private readonly List<Reference> _missing = new();
+    private readonly List<JsonReference> _references = [];
+    private readonly List<Reference> _missing = [];
 
     public FileReferenceBase File { get; }
     public IReadOnlyCollection<JsonReference> References => _references;

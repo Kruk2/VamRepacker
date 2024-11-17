@@ -83,7 +83,7 @@ public sealed class PresetGrouper : IPresetGrouper
             }
         }
 
-        files.RemoveAll(t => filesMovedAsChildren.Contains(t));
+        files.RemoveAll(filesMovedAsChildren.Contains);
     }
 
     private static void GroupAssetPresets<T>(T notNullPreset, string fileNameWithoutExtensions, IEnumerable<T> presetFilesWithPreviews, HashSet<T> filesMovedAsChildren) where T : FileReferenceBase

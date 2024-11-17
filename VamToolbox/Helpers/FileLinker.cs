@@ -1,7 +1,4 @@
-﻿using System.ComponentModel;
-using System.Runtime.ConstrainedExecution;
-using System.Runtime.InteropServices;
-using System.Security;
+﻿using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
 namespace VamToolbox.Helpers;
@@ -29,7 +26,7 @@ public sealed class SoftLinker : ISoftLinker
     private static extern bool SetFileInformationByHandle(SafeHandle hFile, int FileInformationClass, ref FILE_BASIC_INFO FileInformation, uint dwBufferSize);
 
     [StructLayout(LayoutKind.Sequential)]
-    struct FILE_BASIC_INFO
+    private struct FILE_BASIC_INFO
     {
         internal long CreationTime;
         internal long LastAccessTime;
