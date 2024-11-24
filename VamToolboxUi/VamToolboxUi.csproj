@@ -10,7 +10,7 @@
 		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
 		<TieredPGO>true</TieredPGO>
-		<Version>0.12.3</Version>
+		<Version>0.13.0</Version>
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 		<Platforms>x64</Platforms>
 		<AnalysisMode>Recommended</AnalysisMode>
