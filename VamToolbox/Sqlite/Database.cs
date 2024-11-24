@@ -22,7 +22,7 @@ public sealed class Database : IDatabase
 
     public void EnsureCreated()
     {
-        _connection.Query("PRAGMA journal_mode=WAL;PRAGMA synchronous = OFF; PRAGMA journal_size_limit = 6144000;");
+        _connection.Query("PRAGMA journal_mode=WAL;PRAGMA synchronous = NORMAL; PRAGMA journal_size_limit = 6144000;");
 
         CreateFilesTable();
         CreateJsonReferencesTable();
@@ -186,10 +186,10 @@ public sealed class Database : IDatabase
             paramTimestamp.Value = file.ModifiedTime;
             varLocalFileSize.Value = varLocalFileSizeVal.HasValue ? varLocalFileSizeVal : DBNull.Value;
             csFilesField.Value = (object?)csFiles ?? DBNull.Value;
+            commandInsert.ExecuteNonQuery();
         }
 
         transaction.Commit();
-
 
         return _connection.Query<(long id, string fileName, long fileSize, DateTime modified, string? localPath)>(
                 $"select Id, FileName, FileSize, ModifiedTime, LocalPath from {FilesTable}")

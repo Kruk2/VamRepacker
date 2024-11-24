@@ -40,12 +40,12 @@ public class ReferencesResolver : IReferencesResolver
     {
         var refPath = reference.EstimatedReferenceLocation;
         // searching in localSceneFolder for var json files is handled in ScanPackageSceneReference
-        if (!reference.ForJsonFile.IsVar && _freeFilesIndex[_fs.SimplifyRelativePath(localSceneFolder, refPath)] is var f1 && f1.Count > 0) {
+        if (!reference.ForJsonFile.IsVar && _freeFilesIndex.TryGetValue(_fs.SimplifyRelativePath(localSceneFolder, refPath), out var f1) && f1.Count > 0) {
             var matches = f1.OrderByDescending(t => t.UsedByVarPackagesOrFreeFilesCount).ThenBy(t => t.FullPath);
             var x = matches.FirstOrDefault(t => t.IsInVaMDir) ?? matches.First();
             return new JsonReference(x, reference);
         }
-        if (_freeFilesIndex[refPath] is var f2 && f2.Count > 0) {
+        if (_freeFilesIndex.TryGetValue(refPath, out var f2) && f2.Count > 0) {
             var matches = f2.OrderByDescending(t => t.UsedByVarPackagesOrFreeFilesCount).ThenBy(t => t.FullPath);
             var x = matches.FirstOrDefault(t => t.IsInVaMDir) ?? matches.First();
             return new JsonReference(x, reference);
