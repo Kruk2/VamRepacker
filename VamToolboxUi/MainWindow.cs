@@ -343,7 +343,7 @@ public partial class MainWindow : Form, IProgressTracker
         SwitchUI(true);
         await using var scope = _ctx.BeginLifetimeScope();
         var db = scope.Resolve<IDatabase>();
-        await db.ClearCache();
+         db.ClearCache();
         SwitchUI(false);
     }
 

@@ -23,12 +23,13 @@ public class ReferenceCache : IReferenceCache
         _progressTracker = progressTracker;
     }
 
-    public Task SaveCache(IEnumerable<VarPackage> varFiles, IEnumerable<FreeFile> freeFiles) => Task.Run(() => SaveCacheSync(varFiles, freeFiles));
+    public Task SaveCache(IEnumerable<VarPackage> varFiles, IEnumerable<FreeFile> freeFiles) => Task.Run(async () => {
+        _progressTracker.Report("Saving file cache", forceShow: true);
+        await _database.Save(SaveCacheSync(varFiles, freeFiles));
+    });
 
-    private void SaveCacheSync(IEnumerable<VarPackage> varFiles, IEnumerable<FreeFile> freeFiles)
+    private IEnumerable<CachedFile> SaveCacheSync(IEnumerable<VarPackage> varFiles, IEnumerable<FreeFile> freeFiles)
     {
-        _progressTracker.Report("Generating cache", forceShow: true);
-
         var progress = 0;
         var filesFromFreeFiles = freeFiles
             .SelfAndChildren();
@@ -37,9 +38,6 @@ public class ReferenceCache : IReferenceCache
 
         var allFiles = filesFromVars.Cast<FileReferenceBase>().Concat(filesFromFreeFiles).ToList();
         var total = allFiles.Count + allFiles.Count;
-
-        var bulkInsertFiles = new Dictionary<DatabaseFileKey, (string? uuid, long? varLocalFileSizeVal, string? csFiles)>();
-        var bulkInsertReferences = new List<(DatabaseFileKey file, List<Reference> references)>();
         var allFilesGrouped = allFiles.GroupBy(t =>
             new DatabaseFileKey(
                 t.IsVar ? Path.GetFileName(t.Var.FullPath) : t.Free.LocalPath,
@@ -49,10 +47,16 @@ public class ReferenceCache : IReferenceCache
 
         foreach (var files in allFilesGrouped) {
             var firstFile = files.First();
-            bulkInsertFiles[files.Key] = (
-                firstFile.MorphName ?? firstFile.InternalId, 
-                firstFile.IsVar ? firstFile.Size : null,
-                firstFile.CsFiles);
+            var cacheFile = new CachedFile {
+                LocalPath = files.Key.LocalPath,
+                FileName = files.Key.FileName,
+                Size = files.Key.Size,
+                ModifiedTime = files.Key.ModifiedTime,
+                CsFiles = firstFile.CsFiles,
+                Uuid = firstFile.MorphName ?? firstFile.InternalId,
+                VarLocalFileSize = firstFile.IsVar ? firstFile.Size : null,
+                IsInvalidVar = firstFile.IsVar ? firstFile.Var.IsInvalid ? 1 : 0 : 0,
+            };
 
             var uniqueMorphs = files.Select(t => t.MorphName ?? t.InternalId).Distinct();
             var uniqueSizes = files.Select(t => t.IsVar ? (long?)t.Size : null).Distinct();
@@ -63,30 +67,44 @@ public class ReferenceCache : IReferenceCache
                 throw new InvalidOperationException($"Mismatched sizes for {files.Key}");
             }
 
-            var allFilesReferences = files.Select(t => t.JsonFile is null ? [] : t.JsonFile.References.Select(x => x.Reference).Concat(t.JsonFile.Missing).ToList()).ToList();
+            var allFilesReferences = files
+                .Select(t => t.JsonFile is null ? [] : t.JsonFile.References.Select(x => x.Reference).Concat(t.JsonFile.Missing))
+                .Select(t => t.Select(x => new CachedJsonReference {
+                    Index = x.Index,
+                    Length = x.Length,
+                    MorphName = x.MorphName,
+                    InternalId = x.InternalId,
+                    Value = x.Value
+                }))
+                .ToList();
             for (var i = 1; i < allFilesReferences.Count; i++)
             {
-                if (allFilesReferences[i].Count != allFilesReferences[0].Count)
+                if (allFilesReferences[i].Count() != allFilesReferences[0].Count())
                     throw new InvalidOperationException($"Mismatched references count for {files.Key}");
             }
 
-            if (allFilesReferences[0].Count > 0) {
-                bulkInsertReferences.Add((files.Key, allFilesReferences[0]));
-            }
-
+            cacheFile.References = allFilesReferences[0].ToList();
             _progressTracker.Report(new ProgressInfo(Interlocked.Increment(ref progress), total, $"Caching {files.Key.FileName}"));
+            yield return cacheFile;
         }
 
-        _progressTracker.Report("Saving file cache", forceShow: true);
-        var filesIds = _database.SaveFiles(bulkInsertFiles);
-        _progressTracker.Report("Saving references cache", forceShow: true);
-        _database.UpdateReferences(filesIds, bulkInsertReferences);
-        _database.Vaccum();
+        foreach (var varPackage in varFiles.Where(t => t is { Files.Count: 0 }))
+        {
+            yield return new CachedFile
+            {
+                FileName = Path.GetFileName(varPackage.FullPath),
+                LocalPath = "dummy",
+                Size = varPackage.Size,
+                ModifiedTime = varPackage.Modified,
+                References = [],
+                IsInvalidVar = 1
+            };
+        }
     }
 
-    public Task ReadCache(List<PotentialJsonFile> potentialScenes) => Task.Run(() => ReadCacheSync(potentialScenes));
+    public Task ReadCache(List<PotentialJsonFile> potentialScenes) => Task.Run(async () => await ReadCacheAsync(potentialScenes));
 
-    private void ReadCacheSync(List<PotentialJsonFile> potentialScenes)
+    private async Task ReadCacheAsync(List<PotentialJsonFile> potentialScenes)
     {
         var progress = 0;
         HashSet<VarPackage> processedVars = [];
@@ -94,9 +112,8 @@ public class ReferenceCache : IReferenceCache
 
         _progressTracker.Report(new ProgressInfo(0, potentialScenes.Count, "Fetching cache from database", forceShow: true));
 
-        var referenceCache = _database.ReadReferenceCache()
-            .GroupBy(t => new DatabaseFileKey(t.FileName, t.FileSize, t.FileModifiedTime, t.LocalPath))
-            .ToFrozenDictionary(t => t.Key, t => t.ToList());
+        var referenceCache = (await _database.Read())
+            .ToFrozenDictionary(t => new DatabaseFileKey(t.FileName, t.Size, t.ModifiedTime, t.LocalPath), t => t.References);
 
         foreach (var json in potentialScenes) {
             switch (json.IsVar) {
@@ -110,7 +127,7 @@ public class ReferenceCache : IReferenceCache
         }
     }
 
-    private static void ReadReferenceCache(PotentialJsonFile potentialJsonFile, FrozenDictionary<DatabaseFileKey, List<ReferenceEntry>> globalReferenceCache)
+    private static void ReadReferenceCache(PotentialJsonFile potentialJsonFile, FrozenDictionary<DatabaseFileKey, List<CachedJsonReference>?> globalReferenceCache)
     {
         if (potentialJsonFile.IsVar) {
             foreach (var varFile in potentialJsonFile.Var.Files
@@ -119,14 +136,14 @@ public class ReferenceCache : IReferenceCache
                          .Where(t => !t.Dirty)) {
 
                 var varFileName = Path.GetFileName(varFile.ParentVar.FullPath);
-                if (globalReferenceCache.TryGetValue(new DatabaseFileKey(varFileName, varFile.ParentVar.Size, varFile.ParentVar.Modified, varFile.LocalPath), out var references)) {
+                if (globalReferenceCache.TryGetValue(new DatabaseFileKey(varFileName, varFile.ParentVar.Size, varFile.ParentVar.Modified, varFile.LocalPath), out var references) && references != null) {
                     var mappedReferences = references.Where(x => x.Value is not null).Select(t => new Reference(t, varFile)).ToList();
                     potentialJsonFile.AddCachedReferences(varFile.LocalPath, mappedReferences);
                 }
             }
         } else if (!potentialJsonFile.IsVar && !potentialJsonFile.Free.Dirty) {
             var free = potentialJsonFile.Free;
-            if (globalReferenceCache.TryGetValue(new DatabaseFileKey(free.LocalPath, free.Size, free.ModifiedTimestamp, string.Empty), out var references)) {
+            if (globalReferenceCache.TryGetValue(new DatabaseFileKey(free.LocalPath, free.Size, free.ModifiedTimestamp, string.Empty), out var references) && references != null) {
                 var mappedReferences = references.Where(x => x.Value is not null).Select(t => new Reference(t, free)).ToList();
                 potentialJsonFile.AddCachedReferences(mappedReferences);
             }

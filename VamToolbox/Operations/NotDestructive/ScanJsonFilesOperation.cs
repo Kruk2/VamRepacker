@@ -56,20 +56,22 @@ public sealed class ScanJsonFilesOperation : IScanJsonFilesOperation
         await _logger.Init("scan_json_files.log");
         _progressTracker.InitProgress("Scanning scenes/presets references");
 
-        var potentialScenes = await InitLookups(varFiles, freeFiles);
+        var validVarFiles = varFiles.Where(t => !t.IsInvalid).ToList();
+
+        var potentialScenes = await InitLookups(validVarFiles, freeFiles);
         await _referenceCache.ReadCache(potentialScenes);
 
         _total = potentialScenes.Count;
-        await RunScenesScan(potentialScenes, varFiles, freeFiles);
+        await RunScenesScan(potentialScenes, validVarFiles, freeFiles);
 
-        _total = varFiles.Count + freeFiles.Count;
-        await Task.Run(async () => await CalculateDeps(varFiles, freeFiles));
+        _total = validVarFiles.Count + freeFiles.Count;
+        await Task.Run(async () => await CalculateDeps(validVarFiles, freeFiles));
         await _referenceCache.SaveCache(varFiles, freeFiles);
 
         var missingCount = _jsonFiles.Sum(s => s.Missing.Count);
         var resolvedCount = _jsonFiles.Sum(s => s.References.Count);
         var scenes = _jsonFiles.OrderBy(s => s.ToString()).ToList();
-        await Task.Run(() => PrintWarnings(scenes, varFiles));
+        await Task.Run(() => PrintWarnings(scenes, validVarFiles));
 
         _progressTracker.Complete($"Scanned {_scanned} json files for references. Got {_unknownErrorsCount} unknown errors - check logs.\r\n Found {missingCount} missing and {resolvedCount} resolved references.Took {stopWatch.Elapsed:hh\\:mm\\:ss}");
         return scenes;

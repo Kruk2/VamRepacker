@@ -46,6 +46,8 @@ public sealed class VarPackage : IVamObjectWithDependencies
         .GroupBy(t => t.LocalPath, StringComparer.InvariantCultureIgnoreCase)
         .ToFrozenDictionary(t => t.Key, t => t.First(), StringComparer.InvariantCultureIgnoreCase);
 
+    public bool IsInvalid { get; set; }
+
     public VarPackage(
         VarPackageName name,
         string fullPath,

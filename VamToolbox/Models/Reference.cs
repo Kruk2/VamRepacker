@@ -28,7 +28,7 @@ public sealed class Reference
         ParseReference();
     }
 
-    public Reference(ReferenceEntry referenceEntry, FileReferenceBase forJsonFile)
+    public Reference(CachedJsonReference referenceEntry, FileReferenceBase forJsonFile)
     {
         Value = referenceEntry.Value!;
         InternalId = referenceEntry.InternalId;

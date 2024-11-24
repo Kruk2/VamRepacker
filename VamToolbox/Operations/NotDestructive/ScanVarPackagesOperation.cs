@@ -30,7 +30,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
     private int _totalVarsCount;
     private OperationContext _context = null!;
     private readonly IDatabase _database;
-    private FrozenDictionary<DatabaseVarKey, List<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid, long varLocalFileSize, string? csFiles)>> _varCache = null!;
+    private FrozenDictionary<DatabaseVarKey, (List<CachedFile> References, bool IsInvalid)> _varCache = null!;
 
     public ScanVarPackagesOperation(IFileSystem fs, IProgressTracker progressTracker, ILogger logger, IFileGroupers groupers, ISoftLinker softLinker, IDatabase database, IFavAndHiddenGrouper favHiddenGrouper)
     {
@@ -104,7 +104,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
 
     private Task<IEnumerable<(string path, string? softLink)>> InitLookups()
     {
-        return Task.Run(() => {
+        return Task.Run(async () => {
             var packageFiles = _fs.Directory
                 .GetFiles(_fs.Path.Combine(_context.VamDir, KnownNames.AddonPackages), "*.var", SearchOption.AllDirectories)
                 .ToList();
@@ -114,11 +114,12 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
 
             _totalVarsCount = packageFiles.Count;
 
-            _varCache = _database.ReadVarFilesCache()
-                .GroupBy(t => new DatabaseVarKey(t.fileName, t.size, t.modifiedTime))
+            _varCache = (await _database.Read())
+                .Where(t => !string.IsNullOrEmpty(t.LocalPath))
+                .GroupBy(t => new DatabaseVarKey(t.FileName, t.Size, t.ModifiedTime, t.IsInvalidVar == 1))
                 .ToFrozenDictionary(
                     t => t.Key,
-                    t => t.ToList());
+                    t => (References: t.ToList(), t.Key.IsInvalid));
 
             return packageFiles
                 .Select(t => (path: t, softLink: _softLinker.GetSoftLink(t)))
@@ -138,16 +139,16 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
 
     private async Task ExecuteOneAsync(string varFullPath, string? softLink, VarPackageName name)
     {
-        try {
-            varFullPath = varFullPath.NormalizePathSeparators();
-            var isInVamDir = varFullPath.StartsWith(_context.VamDir, StringComparison.Ordinal);
-            var fileInfo = softLink != null ? _fs.FileInfo.New(softLink) : _fs.FileInfo.New(varFullPath);
-            var varPackage = new VarPackage(name, varFullPath, softLink, isInVamDir, fileInfo.Length, fileInfo.LastWriteTimeUtc);
-            var varPackageFileName = Path.GetFileName(varPackage.FullPath);
-            var varCacheKey = new DatabaseVarKey(varPackageFileName, varPackage.Size, varPackage.Modified);
-            _varCache.TryGetValue(varCacheKey, out var varCache);
+        varFullPath = varFullPath.NormalizePathSeparators();
+        var isInVamDir = varFullPath.StartsWith(_context.VamDir, StringComparison.Ordinal);
+        var fileInfo = softLink != null ? _fs.FileInfo.New(softLink) : _fs.FileInfo.New(varFullPath);
+        var varPackage = new VarPackage(name, varFullPath, softLink, isInVamDir, fileInfo.Length, fileInfo.LastWriteTimeUtc);
+        var varPackageFileName = Path.GetFileName(varPackage.FullPath);
+        var varCacheKey = new DatabaseVarKey(varPackageFileName, varPackage.Size, varPackage.Modified, IsInvalid: false);
+        var hasCacheEntry = _varCache.TryGetValue(varCacheKey, out var varCache);
 
-            if (varCache != null) {
+        try {
+            if (hasCacheEntry) {
                 await ReadVarFromCache(varCache, varPackage);
             } else {
                 await using var stream = _fs.File.OpenRead(varFullPath);
@@ -164,6 +165,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
                         } catch (Exception e) when (e is ArgumentException or JsonReaderException or JsonSerializationException) {
                             var message = $"{varFullPath}: {e.Message}";
                             _result.InvalidVars.Add(message);
+                            varPackage.IsInvalid = true;
                         }
 
                         foundMetaFile = true;
@@ -174,7 +176,7 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
                 }
                 if (!foundMetaFile) {
                     _result.MissingMetaJson.Add(varFullPath);
-                    return;
+                    varPackage.IsInvalid = true;
                 }
 
                 var entries = archive.Entries.ToFrozenDictionary(t => t.FileName.NormalizePathSeparators());
@@ -188,26 +190,29 @@ public sealed class ScanVarPackagesOperation : IScanVarPackagesOperation
         } catch (Exception exc) {
             var message = $"{varFullPath}: {exc.Message}";
             _result.InvalidVars.Add(message);
+            _packages.Add(varPackage);
+            varPackage.IsInvalid = true;
         }
 
         _reporter.Report(new ProgressInfo(Interlocked.Increment(ref _scanned), _totalVarsCount, name.Filename));
     }
 
-    private async Task ReadVarFromCache(List<(string fileName, string localPath, long size, DateTime modifiedTime, string? uuid, long varLocalFileSize, string? csFiles)> varCache, VarPackage varPackage)
+    private async Task ReadVarFromCache((List<CachedFile> References, bool IsInvalid) varCache, VarPackage varPackage)
     {
-        foreach (var (_, localPath, _, _, uuid, varLocalFileSize, csFiles) in varCache)
+        varPackage.IsInvalid = varCache.IsInvalid;
+        foreach (var cached in varCache.References)
         {
-            var varFile = new VarPackageFile(localPath.NormalizePathSeparators(), varPackage.IsInVaMDir, varPackage, varLocalFileSize);
-            if (uuid is not null) {
+            var varFile = new VarPackageFile(cached.LocalPath!.NormalizePathSeparators(), varPackage.IsInVaMDir, varPackage, cached.VarLocalFileSize ?? 0);
+            if (cached.Uuid is not null) {
                 if (varFile.ExtLower == ".vmi") {
-                    varFile.MorphName = uuid;
+                    varFile.MorphName = cached.Uuid;
                 } else if (varFile.ExtLower == ".vam") {
-                    varFile.InternalId = uuid;
+                    varFile.InternalId = cached.Uuid;
                 }
             }
 
-            if (csFiles is not null)
-                varFile.CsFiles = csFiles;
+            if (cached.CsFiles is not null)
+                varFile.CsFiles = cached.CsFiles;
         }
 
         static Stream? OpenFileStream(string _) => null;

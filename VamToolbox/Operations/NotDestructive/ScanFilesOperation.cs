@@ -50,9 +50,9 @@ public sealed class ScanFilesOperation : IScanFilesOperation
         var files = new List<FreeFile>();
 
         await Task.Run(async () => {
-            var freeFileCache = _database
-                .ReadFreeFilesCache()
-                .ToFrozenDictionary(t => new DatabaseFileKey(t.fileName, t.size, t.modifiedTime, string.Empty), t => (t.uuid, t.csFiles));
+            var freeFileCache = (await _database.Read())
+                .Where(t => string.IsNullOrEmpty(t.LocalPath))
+                .ToFrozenDictionary(t => new DatabaseFileKey(t.FileName, t.Size, t.ModifiedTime, string.Empty));
 
             _reporter.Report("Scanning Custom folder", forceShow: true);
             files.AddRange(ScanFolder(rootDir, "Custom"));
@@ -87,7 +87,7 @@ public sealed class ScanFilesOperation : IScanFilesOperation
     }
 
     private async Task GroupFiles(
-        FrozenDictionary<DatabaseFileKey, (string? uuid, string? csFiles)> freeFileCache,
+        FrozenDictionary<DatabaseFileKey, CachedFile> freeFileCache,
         List<FreeFile> files, 
         string rootDir)
     {
@@ -98,16 +98,16 @@ public sealed class ScanFilesOperation : IScanFilesOperation
                 continue;
             }
 
-            if (entry.uuid is not null) {
+            if (entry.Uuid is not null) {
                 if (freeFile.ExtLower == ".vmi") {
-                    freeFile.MorphName = entry.uuid;
+                    freeFile.MorphName = entry.Uuid;
                 } else if (freeFile.ExtLower == ".vam") {
-                    freeFile.InternalId = entry.uuid;
+                    freeFile.InternalId = entry.Uuid;
                 }
             }
 
-            if(entry.csFiles is not null)
-                freeFile.CsFiles = entry.csFiles;
+            if(entry.CsFiles is not null)
+                freeFile.CsFiles = entry.CsFiles;
         }
 
         Stream OpenFileStream(string p) => _fs.File.OpenRead(_fs.Path.Combine(rootDir, p));

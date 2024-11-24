@@ -29,7 +29,7 @@ public record DatabaseFileKey(string FileName, long Size, DateTime ModifiedTime,
     }
 }
 
-public record DatabaseVarKey(string FileName, long Size, DateTime ModifiedTime)
+public record DatabaseVarKey(string FileName, long Size, DateTime ModifiedTime, bool IsInvalid)
 {
     public virtual bool Equals(DatabaseVarKey? other)
     {
